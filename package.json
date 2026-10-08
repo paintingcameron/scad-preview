@@ -1,0 +1,74 @@
+{
+  "name": "scad-preview",
+  "displayName": "SCAD Preview",
+  "description": "Fast OpenSCAD preview with color, customizer, cross-sections and slice measurement.",
+  "version": "0.0.1",
+  "publisher": "paintingcameron",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/paintingcameron/scad-preview.git"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "scadPreview.open",
+        "title": "Open Preview",
+        "category": "SCAD Preview",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "scadPreview.open",
+          "when": "resourceExtname == .scad",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "scadPreview.open",
+          "when": "resourceExtname == .scad"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SCAD Preview",
+      "properties": {
+        "scadPreview.openscadPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the OpenSCAD executable or AppImage. When empty, the extension looks for an `OpenSCAD*.AppImage` in the workspace folder or any folder above it, then falls back to `openscad` on `PATH`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p webview",
+    "test": "vitest run",
+    "vscode:prepublish": "node esbuild.mjs --production"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/three": "^0.170.0",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0",
+    "vitest": "^5.0.3"
+  }
+}

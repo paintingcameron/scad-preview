@@ -1,0 +1,38 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#viewport {
+  flex: 1;
+  min-height: 0;
+}
+
+#viewport canvas {
+  display: block;
+}
+
+#statusbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 2px 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+}
+
+#statusbar .error {
+  color: var(--vscode-errorForeground);
+}
