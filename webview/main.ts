@@ -1,19 +1,46 @@
 import type { FromWebview, ToWebview } from '../src/protocol';
+import { Customizer } from './customizer';
 import { buildModel } from './model';
 import { parse3mf, parseHexColor, type MeshData, type Rgba } from './threemf';
 import { Viewer, type ViewName } from './viewer';
 
-declare function acquireVsCodeApi(): { postMessage(msg: FromWebview): void };
+/** Per-panel UI state that VS Code keeps for us while the panel exists. */
+interface UiState {
+  paramsOpen?: boolean;
+}
+
+declare function acquireVsCodeApi(): {
+  postMessage(msg: FromWebview): void;
+  getState(): UiState | undefined;
+  setState(state: UiState): void;
+};
 const vscode = acquireVsCodeApi();
+const uiState: UiState = vscode.getState() ?? {};
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
 const viewer = new Viewer($('viewport'));
 const badge = $('badge');
 const banner = $('banner');
+const paramsPanel = $('params');
+const paramsButton = document.querySelector<HTMLButtonElement>('[data-toggle="params"]')!;
 let hasModel = false;
 /** Last parsed model, kept so a settings change can redraw it without re-rendering. */
 let lastData: MeshData | undefined;
 let defaultColor: Rgba = parseHexColor('#ffffff');
+
+const customizer = new Customizer(paramsPanel, {
+  change: (values, draft) => vscode.postMessage({ type: 'setParams', values, draft }),
+  applyPreset: (name) => vscode.postMessage({ type: 'applyPreset', name }),
+  savePreset: () => vscode.postMessage({ type: 'savePreset' }),
+  deletePreset: () => vscode.postMessage({ type: 'deletePreset' }),
+});
+
+function setParamsOpen(open: boolean): void {
+  paramsPanel.hidden = !open || customizer.isEmpty;
+  paramsButton.classList.toggle('on', open);
+  uiState.paramsOpen = open;
+  vscode.setState(uiState);
+}
 
 const toggles = { ortho: false, edges: true };
 
@@ -24,6 +51,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('#toolbar butt
     if (action === 'fit') viewer.fit();
     if (action === 'rerender') vscode.postMessage({ type: 'rerender' });
     if (view) viewer.setView(view as ViewName);
+    if (toggle === 'params') setParamsOpen(paramsPanel.hidden);
     if (toggle === 'ortho' || toggle === 'edges') {
       toggles[toggle] = !toggles[toggle];
       button.classList.toggle('on', toggles[toggle]);
@@ -60,6 +88,16 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       defaultColor = parseHexColor(msg.defaultColor);
       if (lastData) viewer.setModel(buildModel(lastData, defaultColor), false);
       break;
+    case 'params': {
+      customizer.setParams(msg.defs, msg.values);
+      paramsButton.hidden = customizer.isEmpty;
+      // Open by default the first time a file with parameters is shown.
+      setParamsOpen(uiState.paramsOpen ?? true);
+      break;
+    }
+    case 'presets':
+      customizer.setPresets(msg.names, msg.selected);
+      break;
     case 'status': {
       const el = $('version');
       el.textContent = msg.version ? `OpenSCAD ${msg.version}` : `OpenSCAD not found (${msg.openscadPath})`;
@@ -69,10 +107,11 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       break;
     }
     case 'renderStarted':
-      showBadge('Rendering…');
+      showBadge(msg.draft ? 'Draft…' : 'Rendering…');
       break;
     case 'renderDone': {
-      showBadge(undefined);
+      // A draft result stays labelled until the full render replaces it.
+      showBadge(msg.draft ? 'Draft' : undefined);
       try {
         const started = performance.now();
         lastData = parse3mf(msg.model);
@@ -80,7 +119,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
         hasModel = true;
         showBanner(undefined);
         const loadMs = performance.now() - started;
-        $('stats').textContent = formatStats(msg.facets, msg.ms, msg.errors, msg.warnings);
+        $('stats').textContent = `${formatStats(msg.facets, msg.ms, msg.errors, msg.warnings)}${msg.draft ? ' · draft' : ''}`;
         $('stats').title = `OpenSCAD ${msg.ms} ms · load ${loadMs.toFixed(0)} ms`;
       } catch (err) {
         showBanner(`Could not read the rendered model: ${String(err)}`);

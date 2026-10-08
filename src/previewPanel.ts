@@ -1,9 +1,29 @@
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { defineArgs, parseCustomizer, pruneValues, type ParamDef, type ParamValue } from './customizer';
 import { parseEchoes, parseScadMessages, type ScadMessage } from './messages';
 import { getOpenscadVersion, resolveOpenscadPath } from './openscad';
+import {
+  parsePresetFile,
+  presetPath,
+  presetToValues,
+  serializePresetFile,
+  valuesToPreset,
+  type PresetFile,
+} from './presets';
 import type { FromWebview, ToWebview } from './protocol';
-import { RenderQueue, type RenderResult } from './renderer';
+import { RenderQueue, type RenderRequest, type RenderResult, type RequestOptions } from './renderer';
+
+interface RenderOptions extends RequestOptions {
+  draft?: boolean;
+}
+
+/** What the panel remembers per file between sessions. */
+interface SavedParams {
+  values: Record<string, ParamValue>;
+  preset?: string;
+}
 
 /** Shared across all panels; created once in activate(). */
 export interface Services {
@@ -35,6 +55,13 @@ export class PreviewPanel {
   private diagnosticFiles: vscode.Uri[] = [];
   private statusText = '';
   private statusTooltip = '';
+  /** Customizer parameters read from the file, and the user's overrides of their defaults. */
+  private defs: ParamDef[] = [];
+  private defsKey = '';
+  private values: Record<string, ParamValue> = {};
+  private presets: PresetFile = parsePresetFile(undefined);
+  private selectedPreset?: string;
+  private renderSeq = 0;
 
   private constructor(
     private readonly context: vscode.ExtensionContext,
@@ -55,11 +82,22 @@ export class PreviewPanel {
     );
     this.panel.webview.html = this.html();
     this.queue = new RenderQueue(
-      () => this.onRenderStart(),
+      (request) => this.onRenderStart(request),
       (result) => this.onRenderResult(result),
     );
+    const saved = context.workspaceState.get<SavedParams>(this.stateKey);
+    this.values = saved?.values ?? {};
+    this.selectedPreset = saved?.preset;
+
+    const presetWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(path.dirname(uri.fsPath), path.basename(presetPath(uri.fsPath))),
+    );
+    presetWatcher.onDidChange(() => void this.loadPresets());
+    presetWatcher.onDidCreate(() => void this.loadPresets());
+    presetWatcher.onDidDelete(() => void this.loadPresets());
 
     this.disposables.push(
+      presetWatcher,
       this.panel.webview.onDidReceiveMessage((msg: FromWebview) => this.onMessage(msg)),
       this.panel.onDidChangeViewState(() => this.updateStatusBar()),
       vscode.workspace.onDidSaveTextDocument((doc) => {
@@ -90,11 +128,127 @@ export class PreviewPanel {
       case 'ready':
         this.post({ type: 'file', name: path.basename(this.uri.fsPath) });
         this.postSettings();
+        void this.loadPresets();
         void this.resolveAndRender();
         break;
       case 'rerender':
-        this.render(0);
+        this.render({ delayMs: 0 });
         break;
+      case 'setParams':
+        this.values = pruneValues(msg.values, this.defs);
+        this.saveState();
+        // While dragging: low-detail renders that never cancel each other. Otherwise: a full render.
+        this.render(msg.draft ? { draft: true, delayMs: 0, interrupt: false } : { delayMs: 150 });
+        break;
+      case 'applyPreset':
+        this.applyPreset(msg.name);
+        break;
+      case 'savePreset':
+        void this.savePreset();
+        break;
+      case 'deletePreset':
+        void this.deletePreset();
+        break;
+    }
+  }
+
+  private get stateKey(): string {
+    return `params:${this.uri.toString()}`;
+  }
+
+  private saveState(): void {
+    const state: SavedParams = { values: this.values, preset: this.selectedPreset };
+    void this.context.workspaceState.update(this.stateKey, state);
+  }
+
+  /** Re-read the parameter comments and tell the webview if they changed. */
+  private async refreshParams(): Promise<void> {
+    let source = '';
+    try {
+      source = await fs.readFile(this.uri.fsPath, 'utf8');
+    } catch {
+      return; // Unreadable file: the render will report it.
+    }
+    const defs = parseCustomizer(source);
+    const key = JSON.stringify(defs);
+    if (key === this.defsKey) return;
+    this.defs = defs;
+    this.defsKey = key;
+    this.values = pruneValues(this.values, defs);
+    this.postParams();
+  }
+
+  private postParams(): void {
+    this.post({ type: 'params', defs: this.defs, values: this.values });
+  }
+
+  private async loadPresets(): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await fs.readFile(presetPath(this.uri.fsPath), 'utf8');
+    } catch {
+      text = undefined;
+    }
+    this.presets = parsePresetFile(text);
+    if (this.selectedPreset && !(this.selectedPreset in this.presets.parameterSets)) this.selectedPreset = undefined;
+    this.postPresets();
+  }
+
+  private postPresets(): void {
+    this.post({ type: 'presets', names: Object.keys(this.presets.parameterSets), selected: this.selectedPreset });
+  }
+
+  private applyPreset(name: string | undefined): void {
+    const set = name !== undefined ? this.presets.parameterSets[name] : undefined;
+    this.selectedPreset = set ? name : undefined;
+    this.values = set ? presetToValues(set, this.defs) : {};
+    this.saveState();
+    this.postParams();
+    this.postPresets();
+    this.render({ delayMs: 0 });
+  }
+
+  private async savePreset(): Promise<void> {
+    const existing = Object.keys(this.presets.parameterSets);
+    const name = await vscode.window.showInputBox({
+      title: 'Save parameter preset',
+      prompt: `Saved to ${path.basename(presetPath(this.uri.fsPath))}, which the OpenSCAD app also reads.`,
+      value: this.selectedPreset ?? '',
+      validateInput: (v) => {
+        if (!v.trim()) return 'Enter a name.';
+        if (existing.includes(v.trim()))
+          return { message: `Replaces the existing preset "${v.trim()}".`, severity: vscode.InputBoxValidationSeverity.Warning };
+        return undefined;
+      },
+    });
+    if (!name?.trim()) return;
+    // Re-read first so presets added elsewhere since we loaded aren't lost.
+    await this.loadPresets();
+    this.presets.parameterSets[name.trim()] = valuesToPreset(this.values, this.defs);
+    await this.writePresets();
+    this.selectedPreset = name.trim();
+    this.saveState();
+    this.postPresets();
+  }
+
+  private async deletePreset(): Promise<void> {
+    const name = this.selectedPreset;
+    if (!name) return;
+    const answer = await vscode.window.showWarningMessage(`Delete preset "${name}"?`, { modal: true }, 'Delete');
+    if (answer !== 'Delete') return;
+    await this.loadPresets();
+    delete this.presets.parameterSets[name];
+    await this.writePresets();
+    this.selectedPreset = undefined;
+    this.saveState();
+    this.postPresets();
+  }
+
+  private async writePresets(): Promise<void> {
+    try {
+      await fs.writeFile(presetPath(this.uri.fsPath), serializePresetFile(this.presets), 'utf8');
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Could not save presets: ${String(err)}`);
     }
   }
 
@@ -113,7 +267,7 @@ export class PreviewPanel {
     try {
       this.post({ type: 'status', openscadPath: exe, version: await getOpenscadVersion(exe) });
       this.exe = exe;
-      this.render(0);
+      this.render({ delayMs: 0 });
     } catch (err) {
       this.exe = undefined;
       this.post({ type: 'status', openscadPath: exe, error: String(err) });
@@ -121,13 +275,24 @@ export class PreviewPanel {
     }
   }
 
-  private render(delayMs = 300): void {
-    if (this.exe) this.queue.request({ exe: this.exe, file: this.uri.fsPath }, delayMs);
+  private render({ draft = false, ...options }: RenderOptions = {}): void {
+    const seq = ++this.renderSeq;
+    void this.refreshParams().then(() => {
+      // File reads can finish out of order; only the newest call may queue a render.
+      if (!this.exe || seq !== this.renderSeq) return;
+      const args = defineArgs(this.values);
+      const draftFn = vscode.workspace.getConfiguration('scadPreview').get<number>('draftFn', 16);
+      const isDraft = draft && draftFn > 0;
+      // Last -D wins, so this overrides any $fn the file or a parameter sets.
+      if (isDraft) args.push('-D', `$fn=${draftFn}`);
+      const request: RenderRequest = { exe: this.exe, file: this.uri.fsPath, args, draft: isDraft };
+      this.queue.request(request, options);
+    });
   }
 
-  private onRenderStart(): void {
-    this.post({ type: 'renderStarted' });
-    this.setStatus('$(sync~spin) Rendering…', path.basename(this.uri.fsPath));
+  private onRenderStart(request: RenderRequest): void {
+    this.post({ type: 'renderStarted', draft: request.draft ?? false });
+    this.setStatus(request.draft ? '$(sync~spin) Draft…' : '$(sync~spin) Rendering…', path.basename(this.uri.fsPath));
   }
 
   private onRenderResult(result: RenderResult): void {
@@ -143,9 +308,10 @@ export class PreviewPanel {
     const problems = errors + warnings > 0 ? ` · ${errors} error(s), ${warnings} warning(s)` : '';
     if (result.ok && result.model) {
       const facets = result.summary?.geometry?.facets;
-      this.post({ type: 'renderDone', model: result.model, facets, ms: result.ms, errors, warnings });
-      const icon = errors > 0 ? '$(warning)' : warnings > 0 ? '$(warning)' : '$(check)';
-      this.setStatus(`${icon} ${facets ?? '?'} facets · ${seconds}`, `${name}${problems}`);
+      const draft = result.request.draft ?? false;
+      this.post({ type: 'renderDone', model: result.model, facets, ms: result.ms, errors, warnings, draft });
+      const icon = errors > 0 || warnings > 0 ? '$(warning)' : '$(check)';
+      this.setStatus(`${icon} ${facets ?? '?'} facets · ${seconds}${draft ? ' · draft' : ''}`, `${name}${problems}`);
     } else if (result.empty) {
       // An empty model is usually caused by an earlier problem, such as a missing include.
       const first = messages.find((m) => m.severity === 'error') ?? messages[0];
@@ -253,10 +419,14 @@ export class PreviewPanel {
     <button data-toggle="edges" title="Show facet edges">Edges</button>
     <span class="spacer"></span>
     <button data-action="rerender" title="Render again">Render</button>
+    <button data-toggle="params" title="Show customizer parameters" hidden>Parameters</button>
   </div>
-  <div id="viewport">
-    <div id="badge" hidden></div>
-    <div id="banner" hidden></div>
+  <div id="main">
+    <div id="viewport">
+      <div id="badge" hidden></div>
+      <div id="banner" hidden></div>
+    </div>
+    <div id="params" hidden></div>
   </div>
   <div id="statusbar">
     <span id="file"></span>

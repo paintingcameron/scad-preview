@@ -95,6 +95,14 @@ Webview side:
 - "Reset to defaults" button.
 - **Done when**: dragging a slider updates the model without lag, and saved presets open in the OpenSCAD GUI.
 
+**Status: done (2026-10-08).** Changes from the plan:
+- Parameters come from our own comment parser (`src/customizer.ts`), not `-o model.param`: each extra
+  `-o` re-evaluates the model, which costs ~25 s on BOSL2-heavy files. The parser is tested to match OpenSCAD's export.
+- Same-line notes that aren't specs (`gap = 5; // to the edge`) are shown as hints too; OpenSCAD ignores them.
+- While dragging, drafts don't cancel each other: the running one finishes and only the newest waiting
+  request runs next. Release cancels any draft and renders at full quality.
+- "Lag-free" only holds when OpenSCAD itself is fast: a model whose evaluation takes 25 s still takes ~20 s as a draft.
+
 ### Phase 3: Cross-section view
 
 - One clipping plane applied to all model materials (`renderer.localClippingEnabled`).

@@ -35,7 +35,14 @@ not assumed, unless marked **untested**.
 
 ## Customizer parameters
 
-`-o out.param` gives the parameter definitions as JSON, already parsed. We don't need our own comment parser:
+> **Update (phase 2): we parse the comments ourselves after all.** Every `-o` output re-evaluates the
+> whole model: on `trainer-v2.scad` (BOSL2-heavy) a param-only export takes ~25 s, the same as a render,
+> and `-o a.3mf -o b.param` in one run took 53 s, twice that. `src/customizer.ts` reads the comments in
+> about 3 ms and is tested to match OpenSCAD's export exactly (fixtures in `test/fixtures/customizer/`,
+> plus a one-off check on all 41 parameters of `trainer-v2.scad`). The rules it follows are listed in that file.
+> **Phase 5 consequence:** never add a second `-o` to the render run; the CSG export needs its own strategy.
+
+`-o out.param` gives the parameter definitions as JSON:
 
 ```json
 {"parameters":[
@@ -47,6 +54,13 @@ not assumed, unless marked **untested**.
 ```
 
 Overrides go in with `-D name=value`, or with `-p file.json -P setName` (the GUI's preset format).
+
+- `-D` overrides a top-level assignment in the file (`$fn = 32;` + `-D '$fn=12'` → 12), and when the
+  same name is given twice **the later `-D` wins**, so a draft `$fn` can be appended after the user's values.
+- `-D` also beats a `-p/-P` preset value.
+- Strings need OpenSCAD quoting: `-D 'text="hi \"q\""'` works (JSON-style escaping).
+- Vectors are reported as `"type":"number"` with an array `initial`; `[Hidden]` parameters are omitted.
+- Preset files (`<model>.json`) store every value as a string: `"3.5"`, `"true"`, `"[5, 6]"`, raw text for strings.
 
 ## Debug modifiers via CSG export
 

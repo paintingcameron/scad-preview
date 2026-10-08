@@ -15,6 +15,7 @@ export interface RenderSummary {
 }
 
 export interface RenderResult {
+  request: RenderRequest;
   /** True when OpenSCAD exited cleanly and wrote a mesh. */
   ok: boolean;
   /** True when the model evaluated to nothing ("Current top level object is empty."). */
@@ -33,30 +34,52 @@ export interface RenderResult {
 export interface RenderRequest {
   exe: string;
   file: string;
+  /** Extra command-line arguments, e.g. `-D name=value` overrides. */
+  args?: string[];
+  /** A quick low-detail render while a slider is being dragged. */
+  draft?: boolean;
+}
+
+export interface RequestOptions {
+  delayMs?: number;
+  /**
+   * true (default): kill any render in progress and start this one.
+   * false: let the render in progress finish, then run only the newest waiting request. Used while
+   * dragging, where killing every time the slider moves would mean nothing ever finishes.
+   */
+  interrupt?: boolean;
 }
 
 /**
- * Runs OpenSCAD for one file. Requests are debounced, and a new request kills the render in
- * progress, so only the newest result is ever reported.
+ * Runs OpenSCAD for one file. Requests are debounced, and only the newest request's result is reported.
  */
 export class RenderQueue {
   private timer?: NodeJS.Timeout;
   private child?: ChildProcess;
   private generation = 0;
+  /** Generation of the render in progress, if any. */
+  private activeGeneration?: number;
+  private pending?: RenderRequest;
   private workDir?: Promise<string>;
 
   constructor(
-    private readonly onStart: () => void,
+    private readonly onStart: (request: RenderRequest) => void,
     private readonly onResult: (result: RenderResult) => void,
   ) {}
 
-  request(req: RenderRequest, delayMs = 300): void {
+  request(req: RenderRequest, { delayMs = 300, interrupt = true }: RequestOptions = {}): void {
     clearTimeout(this.timer);
+    if (!interrupt && this.activeGeneration !== undefined) {
+      this.pending = req;
+      return;
+    }
+    this.pending = undefined;
     this.timer = setTimeout(() => void this.run(req), delayMs);
   }
 
   dispose(): void {
     clearTimeout(this.timer);
+    this.pending = undefined;
     this.generation++;
     this.kill();
     void this.workDir?.then((dir) => fs.rm(dir, { recursive: true, force: true }));
@@ -74,9 +97,24 @@ export class RenderQueue {
     }
   }
 
-  private async run({ exe, file }: RenderRequest): Promise<void> {
+  private async run(request: RenderRequest): Promise<void> {
     this.kill();
     const gen = ++this.generation;
+    this.activeGeneration = gen;
+    try {
+      await this.execute(request, gen);
+    } finally {
+      if (this.activeGeneration === gen) {
+        this.activeGeneration = undefined;
+        const next = this.pending;
+        this.pending = undefined;
+        if (next && gen === this.generation) void this.run(next);
+      }
+    }
+  }
+
+  private async execute(request: RenderRequest, gen: number): Promise<void> {
+    const { exe, file } = request;
     const dir = await (this.workDir ??= fs.mkdtemp(path.join(os.tmpdir(), 'scad-preview-')));
     if (gen !== this.generation) return;
 
@@ -91,10 +129,11 @@ export class RenderQueue {
       '-d', depsFile,
       '--summary', 'all',
       '--summary-file', summaryFile,
+      ...(request.args ?? []),
       file,
     ];
 
-    this.onStart();
+    this.onStart(request);
     const started = Date.now();
     const child = spawn(exe, args, { cwd: path.dirname(file), detached: true });
     this.child = child;
@@ -126,6 +165,7 @@ export class RenderQueue {
       summary = undefined;
     }
     this.onResult({
+      request,
       ok: exitCode === 0 && model !== undefined,
       empty: /Current top level object is empty/.test(output),
       model,

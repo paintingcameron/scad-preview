@@ -60,6 +60,12 @@
           "default": "#ffffff",
           "pattern": "^#[0-9a-fA-F]{6}$",
           "markdownDescription": "Color for parts without a `color()`, as `#RRGGBB`."
+        },
+        "scadPreview.draftFn": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 0,
+          "markdownDescription": "While a customizer slider is being dragged, render with `$fn` set to this for speed, then do one full render on release. `0` turns draft renders off."
         }
       }
     }
