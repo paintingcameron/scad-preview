@@ -417,11 +417,28 @@ export class PreviewPanel {
     <span class="sep"></span>
     <button data-toggle="ortho" title="Orthographic projection">Ortho</button>
     <button data-toggle="edges" title="Show facet edges">Edges</button>
+    <button data-toggle="section" title="Cut the model with a plane">Section</button>
     <span class="spacer"></span>
     <button data-action="rerender" title="Render again">Render</button>
     <button data-toggle="params" title="Show customizer parameters" hidden>Parameters</button>
   </div>
   <div id="main">
+    <div id="sectionbar" hidden>
+      <div class="panel-title">Section</div>
+      <div class="field-label">Cut along</div>
+      <div class="axis-row">
+        <button data-axis="x" title="Plane across X">X</button>
+        <button data-axis="y" title="Plane across Y">Y</button>
+        <button data-axis="z" title="Plane across Z">Z</button>
+      </div>
+      <div class="field-label">Position</div>
+      <input id="section-slider" type="range" title="Plane position">
+      <div class="value-row">
+        <input id="section-value" type="number" step="any" title="Plane position (mm)">
+        <span class="unit">mm</span>
+      </div>
+      <button id="section-flip" class="wide">Flip side</button>
+    </div>
     <div id="viewport">
       <div id="badge" hidden></div>
       <div id="banner" hidden></div>

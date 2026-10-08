@@ -30,6 +30,8 @@ export class ViewCube {
   private readonly materials: THREE.MeshBasicMaterial[];
   private readonly raycaster = new THREE.Raycaster();
   private hovered = -1;
+  /** Width in CSS px covered by an overlay panel on the right; the cube sits left of it. */
+  rightInset = 0;
   /** XYZ arrows drawn in their own small viewport to the left of the cube. */
   private readonly axesScene = new THREE.Scene();
   private readonly axesCamera = new THREE.OrthographicCamera(-1.7, 1.7, 1.7, -1.7, 0.1, 10);
@@ -89,7 +91,7 @@ export class ViewCube {
     this.axesCamera.position.copy(this.camera.position);
     this.axesCamera.updateMatrixWorld();
 
-    const x = width - this.size - this.margin;
+    const x = width - this.rightInset - this.size - this.margin;
     renderer.setScissorTest(true);
     renderer.setScissor(x, this.margin, this.size, this.size);
     renderer.setViewport(x, this.margin, this.size, this.size);
@@ -109,7 +111,7 @@ export class ViewCube {
   /** Index of the face under the pointer, or −1. */
   private pick(e: PointerEvent): number {
     const rect = this.dom.getBoundingClientRect();
-    const left = rect.width - this.size - this.margin;
+    const left = rect.width - this.rightInset - this.size - this.margin;
     const top = rect.height - this.size - this.margin;
     const x = e.clientX - rect.left - left;
     const y = e.clientY - rect.top - top;

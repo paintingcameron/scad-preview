@@ -53,28 +53,125 @@ body {
   flex: 1;
 }
 
-#main {
+/* Section panel: a compact card in the top-left corner rather than a full-height panel: it's short, so it hides little. */
+#sectionbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  max-height: calc(100% - 16px);
+  box-sizing: border-box;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vscode-sideBar-background, var(--vscode-editor-background)) 94%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-size: calc(var(--vscode-font-size) * 1.1);
+  overflow-y: auto;
+}
+
+#sectionbar .panel-title {
+  font-size: 1.12em;
+  font-weight: 600;
+}
+
+#sectionbar .field-label,
+#sectionbar .unit {
+  color: var(--vscode-descriptionForeground);
+}
+
+#sectionbar .field-label {
+  margin-top: 4px;
+  font-size: 0.9em;
+}
+
+#sectionbar .axis-row {
+  display: flex;
+  gap: 4px;
+}
+
+#sectionbar .axis-row button {
+  flex: 1;
+}
+
+#sectionbar .value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#sectionbar button {
+  min-width: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+#sectionbar button.wide {
+  margin-top: 6px;
+}
+
+#sectionbar button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#sectionbar button.on {
+  background: var(--vscode-inputOption-activeBackground);
+  border-color: var(--vscode-inputOption-activeBorder);
+}
+
+#section-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--vscode-button-background);
+}
+
+#section-value {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+/* Panels float over the 3D view, which always fills #main. */
+#main {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
 
 #viewport {
-  position: relative;
-  flex: 1;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
 }
 
 /* Customizer panel */
 
 #params {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   width: 300px;
-  flex-shrink: 0;
   border-left: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  background: color-mix(in srgb, var(--vscode-sideBar-background, var(--vscode-editor-background)) 94%, transparent);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   font-size: calc(var(--vscode-font-size) * 1.1);
 }
@@ -234,10 +331,11 @@ body {
   display: block;
 }
 
+/* --inset-left/right: px covered by overlay panels, set by the viewer. */
 #badge {
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: calc(var(--inset-right, 0px) + 8px);
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--vscode-badge-background);
@@ -247,8 +345,8 @@ body {
 
 #banner {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: calc(var(--inset-left, 0px) + 8px);
+  right: calc(var(--inset-right, 0px) + 8px);
   bottom: 8px;
   padding: 6px 10px;
   border: 1px solid var(--vscode-inputValidation-errorBorder);

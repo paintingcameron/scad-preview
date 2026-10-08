@@ -47,6 +47,12 @@ export function buildModel(source: MeshData, defaultColor: Rgba): THREE.Group {
     mesh.renderOrder = 1; // after opaque geometry
     group.add(mesh);
   }
+
+  // Every triangle in one geometry: a closed solid, which the section cap needs.
+  const solid = new THREE.BufferGeometry();
+  solid.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+  solid.computeBoundingSphere();
+  group.userData.solid = solid;
   return group;
 }
 
@@ -68,6 +74,7 @@ export function buildEdges(model: THREE.Group, thresholdDeg = 30): THREE.Group |
 
 /** Free GPU memory held by everything under `root`. */
 export function disposeTree(root: THREE.Object3D): void {
+  (root.userData.solid as THREE.BufferGeometry | undefined)?.dispose();
   root.traverse((o) => {
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
       o.geometry.dispose();

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildEdges, disposeTree } from './model';
+import { Section, type SectionState } from './section';
 import { ViewCube } from './viewCube';
 
 export type ViewName = 'iso' | 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
@@ -33,8 +34,12 @@ export class Viewer {
 
   private grid?: THREE.Object3D;
   private model?: THREE.Group;
+  private modelBounds?: THREE.Box3;
   private edges?: THREE.Group;
   private showEdges = true;
+  private readonly section: Section;
+  private readonly viewCube: ViewCube;
+  private sectionState: SectionState = { enabled: false, axis: 'z', offset: 0, flipped: false };
 
   constructor(private readonly container: HTMLElement) {
     // OpenSCAD is Z-up; make Three.js match so coordinates read the same in both.
@@ -42,7 +47,8 @@ export class Viewer {
     this.perspective.up.set(0, 0, 1);
     this.ortho.up.set(0, 0, 1);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Stencil buffer is needed for the solid cross-section cap.
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     // Cleared by hand each frame so the view cube can be drawn on top in a second pass.
     this.renderer.autoClear = false;
@@ -54,10 +60,12 @@ export class Viewer {
     this.headlight.position.set(0.3, 0.5, 1);
     this.perspective.add(this.headlight);
     this.scene.add(this.perspective, this.ortho);
+    this.section = new Section(this.scene);
 
     this.perspective.position.set(80, -120, 90);
     // Created before the orbit controls so its capture-phase click handler runs first.
     const viewCube = new ViewCube(this.renderer.domElement, (view) => this.setView(view));
+    this.viewCube = viewCube;
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.setGrid(new THREE.Box3(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 0)));
@@ -86,12 +94,47 @@ export class Viewer {
       this.edges = undefined;
     }
     this.model = model;
+    this.modelBounds = model ? new THREE.Box3().setFromObject(model) : undefined;
+    this.section.setSolid(model?.userData.solid as THREE.BufferGeometry | undefined);
+    this.section.update(this.sectionState, this.modelBounds);
     if (!model) return;
+    this.applyClipping(model);
     this.scene.add(model);
     this.updateEdges();
-    const box = new THREE.Box3().setFromObject(model);
-    this.setGrid(box);
+    this.setGrid(this.modelBounds!);
     if (fit) this.fit();
+  }
+
+  /**
+   * Overlay panels cover `left` and `right` CSS px of the canvas. The model view is untouched;
+   * only the view cube and the badge/banner move clear of the panels.
+   */
+  setInsets(left: number, right: number): void {
+    this.viewCube.rightInset = right;
+    this.container.style.setProperty('--inset-left', `${left}px`);
+    this.container.style.setProperty('--inset-right', `${right}px`);
+  }
+
+  /** The current model's bounding box, or undefined when there is no model. */
+  get bounds(): THREE.Box3 | undefined {
+    return this.modelBounds?.clone();
+  }
+
+  /** Show or move the cross-section. The state is kept across model changes. */
+  setSection(state: SectionState): void {
+    this.sectionState = { ...state };
+    this.renderer.localClippingEnabled = state.enabled;
+    this.section.update(this.sectionState, this.modelBounds);
+  }
+
+  /** Point every material under `root` at the section plane; the renderer decides whether it applies. */
+  private applyClipping(root: THREE.Object3D): void {
+    root.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
+        const materials = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of materials) m.clippingPlanes = [this.section.plane];
+      }
+    });
   }
 
   fit(): void {
@@ -143,7 +186,10 @@ export class Viewer {
   private updateEdges(): void {
     if (this.showEdges && this.model && !this.edges) {
       this.edges = buildEdges(this.model);
-      if (this.edges) this.scene.add(this.edges);
+      if (this.edges) {
+        this.applyClipping(this.edges);
+        this.scene.add(this.edges);
+      }
     }
     if (this.edges) this.edges.visible = this.showEdges;
   }

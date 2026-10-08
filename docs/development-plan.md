@@ -113,6 +113,13 @@ Webview side:
 - The plane stays put across re-renders, so you can edit and watch the same slice.
 - **Done when**: you can sweep a plane through a model and see solid filled sections with no z-fighting.
 
+**Status: done (2026-10-08).** Changes from the plan:
+- The cap is one diagonal hatch, not tinted per part: the stencil method needs a closed mesh, and
+  each color is only a patch of the surface. The hatch stands out on any model color.
+- Controls are a floating card (top-left); the Parameters panel also floats over the view instead of
+  shrinking it. No in-scene drag handle or arbitrary angle yet.
+- Verified with headless Chrome screenshots of the real webview bundle (harness kept outside the repo).
+
 ### Phase 4: 2D slice and measurement
 
 - **Slice geometry**: intersect every triangle with the plane → segments → join by shared endpoints

@@ -1,12 +1,15 @@
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { Customizer } from './customizer';
 import { buildModel } from './model';
+import type { SectionState } from './section';
+import { SectionBar } from './sectionBar';
 import { parse3mf, parseHexColor, type MeshData, type Rgba } from './threemf';
 import { Viewer, type ViewName } from './viewer';
 
 /** Per-panel UI state that VS Code keeps for us while the panel exists. */
 interface UiState {
   paramsOpen?: boolean;
+  section?: SectionState;
 }
 
 declare function acquireVsCodeApi(): {
@@ -35,11 +38,25 @@ const customizer = new Customizer(paramsPanel, {
   deletePreset: () => vscode.postMessage({ type: 'deletePreset' }),
 });
 
+const sectionBar = new SectionBar(
+  $('sectionbar'),
+  document.querySelector<HTMLButtonElement>('[data-toggle="section"]')!,
+  uiState.section,
+  (state) => {
+    viewer.setSection(state);
+    uiState.section = state;
+    vscode.setState(uiState);
+  },
+);
+viewer.setSection(sectionBar.current);
+
 function setParamsOpen(open: boolean): void {
   paramsPanel.hidden = !open || customizer.isEmpty;
   paramsButton.classList.toggle('on', open);
   uiState.paramsOpen = open;
   vscode.setState(uiState);
+  // The panel floats over the right of the view; keep the model and view cube clear of it.
+  viewer.setInsets(0, paramsPanel.hidden ? 0 : paramsPanel.offsetWidth);
 }
 
 const toggles = { ortho: false, edges: true };
@@ -116,6 +133,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
         const started = performance.now();
         lastData = parse3mf(msg.model);
         viewer.setModel(buildModel(lastData, defaultColor), !hasModel);
+        sectionBar.setBounds(viewer.bounds);
         hasModel = true;
         showBanner(undefined);
         const loadMs = performance.now() - started;
