@@ -1,74 +1,110 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FromWebview, ToWebview } from '../src/protocol';
+import { buildModel } from './model';
+import { parse3mf, parseHexColor, type MeshData, type Rgba } from './threemf';
+import { Viewer, type ViewName } from './viewer';
 
 declare function acquireVsCodeApi(): { postMessage(msg: FromWebview): void };
 const vscode = acquireVsCodeApi();
 
-// OpenSCAD is Z-up; make Three.js match so coordinates read the same in both.
-THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+const $ = (id: string): HTMLElement => document.getElementById(id)!;
+const viewer = new Viewer($('viewport'));
+const badge = $('badge');
+const banner = $('banner');
+let hasModel = false;
+/** Last parsed model, kept so a settings change can redraw it without re-rendering. */
+let lastData: MeshData | undefined;
+let defaultColor: Rgba = parseHexColor('#ffffff');
 
-const container = document.getElementById('viewport')!;
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-container.appendChild(renderer.domElement);
+const toggles = { ortho: false, edges: true };
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1e1e1e);
-
-const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 10000);
-camera.position.set(80, -120, 90);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-
-const grid = new THREE.GridHelper(200, 20, 0x555555, 0x333333);
-grid.rotation.x = Math.PI / 2; // GridHelper lies in XZ; rotate into the XY build plate.
-scene.add(grid);
-scene.add(new THREE.AxesHelper(30));
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(100, -100, 200);
-scene.add(sun);
-
-// Placeholder so we can see lighting and orbiting work before real models arrive.
-const placeholder = new THREE.Mesh(
-  new THREE.BoxGeometry(20, 20, 20),
-  new THREE.MeshStandardMaterial({ color: 0xf9d72c }),
-);
-placeholder.position.z = 10;
-scene.add(placeholder);
-
-function resize(): void {
-  const { clientWidth: w, clientHeight: h } = container;
-  renderer.setSize(w, h);
-  camera.aspect = w / Math.max(h, 1);
-  camera.updateProjectionMatrix();
+for (const button of document.querySelectorAll<HTMLButtonElement>('#toolbar button')) {
+  const { action, view, toggle } = button.dataset;
+  if (toggle === 'ortho' || toggle === 'edges') button.classList.toggle('on', toggles[toggle]);
+  button.addEventListener('click', () => {
+    if (action === 'fit') viewer.fit();
+    if (action === 'rerender') vscode.postMessage({ type: 'rerender' });
+    if (view) viewer.setView(view as ViewName);
+    if (toggle === 'ortho' || toggle === 'edges') {
+      toggles[toggle] = !toggles[toggle];
+      button.classList.toggle('on', toggles[toggle]);
+      if (toggle === 'ortho') viewer.setOrthographic(toggles.ortho);
+      else viewer.setEdges(toggles.edges);
+    }
+  });
 }
-new ResizeObserver(resize).observe(container);
-resize();
 
-renderer.setAnimationLoop(() => {
-  controls.update();
-  renderer.render(scene, camera);
-});
+function showBadge(text: string | undefined): void {
+  badge.hidden = !text;
+  badge.textContent = text ?? '';
+}
+
+function showBanner(text: string | undefined): void {
+  banner.hidden = !text;
+  banner.textContent = text ?? '';
+}
+
+function formatStats(facets: number | undefined, ms: number, errors: number, warnings: number): string {
+  const parts = [facets !== undefined ? `${facets.toLocaleString()} facets` : undefined, `${(ms / 1000).toFixed(2)} s`];
+  if (errors) parts.push(`${errors} error${errors > 1 ? 's' : ''}`);
+  if (warnings) parts.push(`${warnings} warning${warnings > 1 ? 's' : ''}`);
+  return parts.filter(Boolean).join(' · ');
+}
 
 window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
   const msg = event.data;
   switch (msg.type) {
     case 'file':
-      document.getElementById('file')!.textContent = msg.name;
+      $('file').textContent = msg.name;
+      break;
+    case 'settings':
+      defaultColor = parseHexColor(msg.defaultColor);
+      if (lastData) viewer.setModel(buildModel(lastData, defaultColor), false);
       break;
     case 'status': {
-      const el = document.getElementById('version')!;
-      el.textContent = msg.version
-        ? `OpenSCAD ${msg.version}`
-        : `OpenSCAD not found (${msg.openscadPath})`;
+      const el = $('version');
+      el.textContent = msg.version ? `OpenSCAD ${msg.version}` : `OpenSCAD not found (${msg.openscadPath})`;
       el.title = msg.error ?? msg.openscadPath;
       el.classList.toggle('error', !msg.version);
+      if (!msg.version) showBanner(`OpenSCAD could not be started. Set "scadPreview.openscadPath". ${msg.error ?? ''}`);
       break;
     }
+    case 'renderStarted':
+      showBadge('Rendering…');
+      break;
+    case 'renderDone': {
+      showBadge(undefined);
+      try {
+        const started = performance.now();
+        lastData = parse3mf(msg.model);
+        viewer.setModel(buildModel(lastData, defaultColor), !hasModel);
+        hasModel = true;
+        showBanner(undefined);
+        const loadMs = performance.now() - started;
+        $('stats').textContent = formatStats(msg.facets, msg.ms, msg.errors, msg.warnings);
+        $('stats').title = `OpenSCAD ${msg.ms} ms · load ${loadMs.toFixed(0)} ms`;
+      } catch (err) {
+        showBanner(`Could not read the rendered model: ${String(err)}`);
+      }
+      break;
+    }
+    case 'renderEmpty':
+      showBadge(undefined);
+      viewer.setModel(undefined, false);
+      hasModel = false;
+      lastData = undefined;
+      showBanner(
+        msg.firstProblem
+          ? `The model is empty. First problem: ${msg.firstProblem}`
+          : 'The model is empty: nothing to show.',
+      );
+      $('stats').textContent = formatStats(undefined, msg.ms, msg.errors, msg.warnings);
+      break;
+    case 'renderFailed':
+      showBadge(undefined);
+      // Keep the last good model on screen so a typo doesn't wipe the view.
+      showBanner(`Render failed: ${msg.message}`);
+      $('stats').textContent = `failed · ${(msg.ms / 1000).toFixed(2)} s`;
+      break;
   }
 });
 

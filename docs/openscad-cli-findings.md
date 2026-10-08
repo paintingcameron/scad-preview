@@ -21,6 +21,11 @@ not assumed, unless marked **untested**.
   <base name="Color 2" displaycolor="#007FFF99"/>
   ```
 - The whole model comes out as **one `<object>`** with per-triangle material indices, not one object per color.
+- With the default color scheme (Cornfield), faces cut by an **uncolored** subtracted shape are exported
+  with an extra material `#9DCB51` (green), e.g. the walls of a BOSL2 `diff()` hole. `--colorscheme=Monotone`
+  removes it: those faces come out uncolored, and explicit `color()`/`recolor()` faces keep their color.
+- `-O export-3mf/color=#ffffff` does **not** change the `Default` (#F9D72C) material, so the extension
+  draws uncolored faces in its own `scadPreview.defaultColor` instead.
 - `-O export-3mf/...` options exist: `color-mode` (model/none/selected-only), `material-type`
   (color/basematerial), `decimal-precision`, and others. `--help-export` lists them all.
 - `-o -` writes to stdout (verified with `--export-format binstl`: 35 884 bytes). Stdout for 3MF
@@ -75,6 +80,26 @@ WARNING: Ignoring unknown variable "undefined_var" in file warn.scad, line 2
 ```
 
 The exit code is 1 on a parse error. `ECHO:` lines can be captured with `-o out.echo`, or read from stderr.
+
+More, from phase 1 testing:
+
+- File names in messages are **relative to the main file's folder** (`in file lib/helper.scad`), even when
+  OpenSCAD is given an absolute path and run from another directory.
+- `TRACE: called by '…' in file X, line N` lines follow an error and give the call chain.
+- A failed `assert()` prints `ERROR:` but still **exits 0 and writes a mesh** of whatever else was built.
+- An empty model prints `Current top level object is empty.`, **exits 1** and writes no output or summary file.
+
+## Process behaviour
+
+- The AppImage runs as **two processes** (the AppImage runtime plus OpenSCAD). Spawning it as its own
+  process group and signalling the group (`process.kill(-pid)`) stops both; verified with an 18 s render cancelled after 1.5 s.
+- Render time is mostly startup for small models: about 0.35–0.5 s wall time for models whose geometry
+  takes 60–80 ms.
+
+## Large-model reference
+
+`for (i = [0:600]) translate(...) sphere(3, $fn = 64);` makes 752 170 facets in 18 s. The 3MF is 11.6 MB,
+and our parser reads it in about 1.3 s in Node.
 
 ## Dependencies
 

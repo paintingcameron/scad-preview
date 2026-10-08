@@ -76,6 +76,13 @@ Webview side:
 - **Keep the camera between renders**; only auto-fit on the first render.
 - **Done when**: editing the probe model shows a red box and a translucent blue sphere, with errors underlined in the editor.
 
+**Status: done (2026-10-08).** Added along the way:
+- Uncolored parts draw in `scadPreview.defaultColor` (white by default). OpenSCAD runs with
+  `--colorscheme=Monotone` so faces cut by uncolored shapes aren't exported green.
+- A clickable view cube (Top/Bottom/Front/Back/Left/Right) and an XYZ axis gizmo in the bottom-right, replacing the axis lines.
+- An empty model's banner shows the first warning, because an empty result is usually a missing include.
+- Dev host launches with the old OpenSCAD preview extension disabled.
+
 ### Phase 2: Customizer
 
 - On each render, also export `model.param` (in the same OpenSCAD run, using a second `-o`).

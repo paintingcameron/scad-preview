@@ -25,6 +25,11 @@
         "title": "Open Preview",
         "category": "SCAD Preview",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "scadPreview.showOutput",
+        "title": "Show Render Output",
+        "category": "SCAD Preview"
       }
     ],
     "menus": {
@@ -49,6 +54,12 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Path to the OpenSCAD executable or AppImage. When empty, the extension looks for an `OpenSCAD*.AppImage` in the workspace folder or any folder above it, then falls back to `openscad` on `PATH`."
+        },
+        "scadPreview.defaultColor": {
+          "type": "string",
+          "default": "#ffffff",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "markdownDescription": "Color for parts without a `color()`, as `#RRGGBB`."
         }
       }
     }
@@ -61,6 +72,7 @@
     "vscode:prepublish": "node esbuild.mjs --production"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "three": "^0.170.0"
   },
   "devDependencies": {

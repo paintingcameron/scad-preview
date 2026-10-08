@@ -15,7 +15,46 @@ body {
   flex-direction: column;
 }
 
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+#toolbar button {
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+#toolbar button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#toolbar button.on {
+  background: var(--vscode-inputOption-activeBackground);
+  border-color: var(--vscode-inputOption-activeBorder);
+}
+
+#toolbar .sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--vscode-panel-border);
+}
+
+#toolbar .spacer {
+  flex: 1;
+}
+
 #viewport {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
@@ -24,13 +63,44 @@ body {
   display: block;
 }
 
+#badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  pointer-events: none;
+}
+
+#banner {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 3px;
+  background: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-foreground);
+  white-space: pre-wrap;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 #statusbar {
   display: flex;
-  justify-content: space-between;
-  gap: 1em;
+  gap: 1.5em;
   padding: 2px 8px;
   border-top: 1px solid var(--vscode-panel-border);
   color: var(--vscode-descriptionForeground);
+}
+
+#statusbar #stats {
+  flex: 1;
 }
 
 #statusbar .error {
