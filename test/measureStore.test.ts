@@ -16,6 +16,25 @@ describe('parseMeasureFile', () => {
     expect(parseMeasureFile('{ not json')).toEqual({ measurements: [], hiddenCode: [] });
   });
 
+  it('reads walls, angles and boxes, skipping unknown kinds and angles without a third point', () => {
+    const text = JSON.stringify({
+      measurements: [
+        { kind: 'wall', a: [0, 0, 0], b: [3, 0, 0] },
+        { kind: 'angle', a: [1, 0, 0], b: [0, 0, 0], c: [0, 1, 0] },
+        { kind: 'angle', a: [1, 0, 0], b: [0, 0, 0] },
+        { kind: 'box', a: [0, 0, 0], b: [6, 6, 0], diameter: 6 },
+        { kind: 'radius', a: [0, 0, 0], b: [1, 1, 1] },
+        { kind: 'distance', a: [0, 0, 0], b: [1, 1, 1] },
+      ],
+    });
+    expect(parseMeasureFile(text).measurements).toEqual([
+      { kind: 'wall', a: [0, 0, 0], b: [3, 0, 0] },
+      { kind: 'angle', a: [1, 0, 0], b: [0, 0, 0], c: [0, 1, 0] },
+      { kind: 'box', a: [0, 0, 0], b: [6, 6, 0], diameter: 6 },
+      { a: [0, 0, 0], b: [1, 1, 1] },
+    ]);
+  });
+
   it('keeps good entries and skips malformed ones', () => {
     const text = JSON.stringify({
       version: 1,

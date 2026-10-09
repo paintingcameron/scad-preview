@@ -253,17 +253,136 @@ export function findSnap(slice: Slice, u: number, v: number, radius: number): Sn
   if (best) return best;
   for (const loop of slice.loops) if (loop.circle) consider('center', loop.circle.cu, loop.circle.cv, loop);
   if (best) return best;
+  forEachEdge(slice, (au, av, bu, bv, loop) => {
+    const [qu, qv] = nearestOnSegment(u, v, au, av, bu, bv);
+    consider('edge', qu, qv, loop);
+  });
+  return best;
+}
+
+/** Calls `fn` for every edge of every loop, with the edge's two end points. */
+function forEachEdge(slice: Slice, fn: (au: number, av: number, bu: number, bv: number, loop: Loop) => void): void {
   for (const loop of slice.loops) {
     const p = loop.points;
     const n = p.length / 2;
     const edges = loop.closed ? n : n - 1;
     for (let i = 0; i < edges; i++) {
       const j = (i + 1) % n;
-      const [qu, qv] = nearestOnSegment(u, v, p[i * 2], p[i * 2 + 1], p[j * 2], p[j * 2 + 1]);
-      consider('edge', qu, qv, loop);
+      fn(p[i * 2], p[i * 2 + 1], p[j * 2], p[j * 2 + 1], loop);
+    }
+  }
+}
+
+/** Even-odd rule over one closed loop. */
+function loopContains(loop: Loop, u: number, v: number): boolean {
+  const p = loop.points;
+  const n = p.length / 2;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [ui, vi, uj, vj] = [p[i * 2], p[i * 2 + 1], p[j * 2], p[j * 2 + 1]];
+    if (vi > v !== vj > v && u < ((uj - ui) * (v - vi)) / (vj - vi) + ui) inside = !inside;
+  }
+  return inside;
+}
+
+/** Inside the material: inside an odd number of closed loops (an outline minus its holes). */
+export function insideSlice(slice: Slice, u: number, v: number): boolean {
+  let inside = false;
+  for (const loop of slice.loops) if (loop.closed && loopContains(loop, u, v)) inside = !inside;
+  return inside;
+}
+
+function loopArea(loop: Loop): number {
+  const p = loop.points;
+  const n = p.length / 2;
+  let twice = 0;
+  for (let i = 0, j = n - 1; i < n; j = i++) twice += p[j * 2] * p[i * 2 + 1] - p[i * 2] * p[j * 2 + 1];
+  return Math.abs(twice) / 2;
+}
+
+/** The smallest closed loop around (u, v), e.g. the hole it is in; undefined outside every loop. */
+export function loopAround(slice: Slice, u: number, v: number): Loop | undefined {
+  let best: Loop | undefined;
+  let bestArea = Infinity;
+  for (const loop of slice.loops) {
+    if (!loop.closed || !loopContains(loop, u, v)) continue;
+    const area = loopArea(loop);
+    if (area < bestArea) {
+      best = loop;
+      bestArea = area;
     }
   }
   return best;
+}
+
+export interface Bounds2 {
+  minU: number;
+  minV: number;
+  maxU: number;
+  maxV: number;
+}
+
+export function pointsBounds(points: number[]): Bounds2 {
+  const b = { minU: Infinity, minV: Infinity, maxU: -Infinity, maxV: -Infinity };
+  for (let i = 0; i < points.length; i += 2) {
+    b.minU = Math.min(b.minU, points[i]);
+    b.maxU = Math.max(b.maxU, points[i]);
+    b.minV = Math.min(b.minV, points[i + 1]);
+    b.maxV = Math.max(b.maxV, points[i + 1]);
+  }
+  return b;
+}
+
+/** Distance along the ray from (u, v) in direction (du, dv) to the first outline edge beyond `minT`. */
+export function castRay2d(slice: Slice, u: number, v: number, du: number, dv: number, minT = 1e-6): number | undefined {
+  let best: number | undefined;
+  forEachEdge(slice, (au, av, bu, bv) => {
+    const eu = bu - au;
+    const ev = bv - av;
+    const denom = du * ev - dv * eu;
+    if (Math.abs(denom) < 1e-12) return; // parallel
+    const t = ((au - u) * ev - (av - v) * eu) / denom;
+    const s = ((au - u) * dv - (av - v) * du) / denom;
+    if (t > minT && s >= 0 && s <= 1 && (best === undefined || t < best)) best = t;
+  });
+  return best;
+}
+
+export interface Wall {
+  from: [number, number];
+  to: [number, number];
+}
+
+/**
+ * Wall thickness at the outline edge nearest (u, v), within `radius`: from that edge straight across
+ * the material to the next outline edge. "Straight across" is perpendicular to the edge, or along the
+ * radius on a round outline, whose facets would otherwise tilt it.
+ */
+export function wallAcross(slice: Slice, u: number, v: number, radius: number): Wall | undefined {
+  let edge: { u: number; v: number; nu: number; nv: number } | undefined;
+  let bestDist = radius;
+  forEachEdge(slice, (au, av, bu, bv, loop) => {
+    const [qu, qv] = nearestOnSegment(u, v, au, av, bu, bv);
+    const dist = Math.hypot(qu - u, qv - v);
+    const len = Math.hypot(bu - au, bv - av);
+    if (dist > bestDist || len === 0) return;
+    bestDist = dist;
+    const c = loop.circle;
+    const r = c && Math.hypot(qu - c.cu, qv - c.cv);
+    edge = c && r ? { u: qu, v: qv, nu: (qu - c.cu) / r, nv: (qv - c.cv) / r } : { u: qu, v: qv, nu: -(bv - av) / len, nv: (bu - au) / len };
+  });
+  if (!edge) return undefined;
+  // Try both directions; the material is on the side whose span is inside the cut.
+  for (const sign of [1, -1]) {
+    const nu = edge.nu * sign;
+    const nv = edge.nv * sign;
+    const t = castRay2d(slice, edge.u, edge.v, nu, nv);
+    if (t === undefined) continue;
+    if (insideSlice(slice, edge.u + (nu * t) / 2, edge.v + (nv * t) / 2)) {
+      return { from: [edge.u, edge.v], to: [edge.u + nu * t, edge.v + nv * t] };
+    }
+  }
+  return undefined;
 }
 
 function nearestOnSegment(u: number, v: number, au: number, av: number, bu: number, bv: number): [number, number] {

@@ -3,10 +3,21 @@ import * as path from 'node:path';
 
 type Vec3 = [number, number, number];
 
-/** A measurement added in the preview (clicked or typed), as saved. */
+export type MeasureKind = 'distance' | 'wall' | 'angle' | 'box';
+const KINDS: readonly string[] = ['distance', 'wall', 'angle', 'box'];
+
+/**
+ * A measurement added in the preview (clicked or typed), as saved.
+ * - distance, wall: from a to b. `kind` is left out for a distance.
+ * - angle: at the corner b, between a and c.
+ * - box: a is the low corner, b the high one; `diameter` when the outline it came from is round.
+ */
 export interface SavedMeasurement {
+  kind?: Exclude<MeasureKind, 'distance'>;
   a: Vec3;
   b: Vec3;
+  c?: Vec3;
+  diameter?: number;
   label?: string;
   hidden?: boolean;
 }
@@ -43,7 +54,12 @@ export function parseMeasureFile(text: string | undefined): SavedMeasures {
   if (Array.isArray(measurements)) {
     for (const m of measurements) {
       if (!m || !isVec3(m.a) || !isVec3(m.b)) continue;
+      if (m.kind !== undefined && !KINDS.includes(m.kind)) continue; // a kind this version doesn't know
+      if (m.kind === 'angle' && !isVec3(m.c)) continue;
       const entry: SavedMeasurement = { a: m.a, b: m.b };
+      if (m.kind && m.kind !== 'distance') entry.kind = m.kind;
+      if (m.kind === 'angle') entry.c = m.c;
+      if (m.kind === 'box' && typeof m.diameter === 'number' && Number.isFinite(m.diameter)) entry.diameter = m.diameter;
       if (typeof m.label === 'string' && m.label) entry.label = m.label;
       if (m.hidden === true) entry.hidden = true;
       saved.measurements.push(entry);

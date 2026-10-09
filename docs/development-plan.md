@@ -157,6 +157,13 @@ Webview side:
 - **Bounding box**: of one cut outline (with Ø when it's round), or of the whole model.
 - Each is saved and listed like a distance.
 
+**Status: done (2026-10-09).** A tool row in the Measure card picks the tool.
+Wall and box take one click and preview what they would add while hovering. On the cut, a wall runs
+perpendicular to the clicked edge, or along the radius on a round outline (so a faceted hole doesn't
+tilt it). On the surface, it follows the inward normal through the mesh. A box on the cut is the
+outline under the cursor (a hole, or the part around it), or the whole cut away from them; with
+Section off it is the whole model.
+
 ### Phase 5: Debug modifiers
 
 - Add `-o model.csg` to the render run.

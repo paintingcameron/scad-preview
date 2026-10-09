@@ -458,15 +458,19 @@ export class PreviewPanel {
       <button id="section-flip" class="wide">Flip side</button>
     </div>
     <div id="measurecard" class="card" hidden>
-      <div class="card-head">
-        <span class="panel-title">Measure</span>
-        <button id="measure-clear" title="Remove all measurements">Clear all</button>
+      <div class="panel-title">Measure</div>
+      <div id="measure-tools" class="segmented">
+        <button data-tool="distance" title="Distance between two points. Snaps near corners, hole centres and edges; hold Alt for a free point. Esc cancels.">Distance</button>
+        <button data-tool="wall" title="Wall thickness: click one side and get the distance straight through the material to the other">Wall</button>
+        <button data-tool="angle" title="Angle between three points: an arm, the corner, the other arm">Angle</button>
+        <button data-tool="box" title="Size of an outline or hole on the cut (Ø when round), of the whole cut, or of the whole model">Box</button>
       </div>
+      <div id="measure-hint" class="hint"></div>
       <div id="measure-readout" class="readout"></div>
-      <div class="entry">
+      <div id="measure-entry" class="entry">
         <div class="entry-head">
           <span id="entry-label" class="field-label">First point</span>
-          <label title="Offset from the first point instead of absolute coordinates"><input id="entry-relative" type="checkbox"> relative</label>
+          <label title="Offset from the previous point instead of absolute coordinates"><input id="entry-relative" type="checkbox"> relative</label>
         </div>
         <div class="xyz">
           <input id="entry-x" type="number" step="any" title="X" placeholder="X">
@@ -475,9 +479,11 @@ export class PreviewPanel {
           <button id="entry-add" title="Add this point (Enter)">Add</button>
         </div>
       </div>
-      <div id="measure-list-actions" class="list-actions" hidden><button id="measure-show-all">Show all</button><button id="measure-hide-all">Hide all</button></div>
+      <div id="measure-list-head" class="list-head" hidden>
+        <label title="Show or hide every measurement on the model"><input id="measure-all" type="checkbox"> All</label>
+        <button id="measure-clear" title="Remove the measurements you added (code ones come from the file)">Clear</button>
+      </div>
       <div id="measure-list"></div>
-      <div class="hint">Click two points. With Section on they lie on the cut. Snaps near corners, hole centres and edges; hold Alt for a free point. Esc cancels. From the file: <code>echo("measure", [x,y,z], [x,y,z], "label");</code></div>
     </div>
     </div>
     <div id="viewport">

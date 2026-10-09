@@ -42,13 +42,15 @@ const customizer = new Customizer(paramsPanel, {
 const measure = new Measure(viewer, $('viewport'), {
   toggle: document.querySelector<HTMLButtonElement>('[data-toggle="measure"]')!,
   card: $('measurecard'),
+  tools: $('measure-tools'),
   readout: $('measure-readout'),
+  hint: $('measure-hint'),
   list: $('measure-list'),
   clearAll: $('measure-clear') as HTMLButtonElement,
-  listActions: $('measure-list-actions'),
-  showAll: $('measure-show-all') as HTMLButtonElement,
-  hideAll: $('measure-hide-all') as HTMLButtonElement,
+  listHead: $('measure-list-head'),
+  allToggle: $('measure-all') as HTMLInputElement,
   entry: {
+    box: $('measure-entry'),
     label: $('entry-label'),
     x: $('entry-x') as HTMLInputElement,
     y: $('entry-y') as HTMLInputElement,

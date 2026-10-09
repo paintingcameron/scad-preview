@@ -156,6 +156,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow-x: hidden; /* rows shrink their names instead */
   overflow-y: auto;
   font-variant-numeric: tabular-nums;
 }
@@ -188,7 +189,8 @@ body {
 }
 
 .card .xyz .point-name {
-  width: 1.2em;
+  flex: none;
+  width: 2em; /* fits "Min" / "Max" for boxes */
   color: var(--vscode-descriptionForeground);
   font-size: 0.9em;
 }
@@ -224,6 +226,39 @@ body {
   border-top: 1px solid var(--vscode-panel-border);
 }
 
+.card .entry[hidden] {
+  display: none;
+}
+
+/* Joined buttons, one of which is on: the measuring tools. */
+.card .segmented {
+  display: flex;
+}
+
+.card .segmented button {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  border-radius: 0;
+  font-size: 0.9em;
+}
+
+.card .segmented button + button {
+  margin-left: -1px; /* share the border between neighbours */
+}
+
+.card .segmented button:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.card .segmented button:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+.card .segmented button.on {
+  position: relative; /* its border on top of the neighbours' */
+}
+
 .card .entry-head {
   display: flex;
   align-items: center;
@@ -247,33 +282,42 @@ body {
   accent-color: var(--vscode-button-background);
 }
 
-.card .list-actions {
+/*
+ * The list: a header (show-all checkbox, Clear) and one aligned line per measurement. Header and rows
+ * share the same left padding, so the "All" checkbox sits over the rows' checkboxes.
+ */
+.card .list-head {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 0;
+  border-top: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
 }
 
-.card .list-actions[hidden] {
+.card .list-head[hidden] {
   display: none;
 }
 
-.card .list-actions button {
-  flex: 1;
-}
-
-/* Hidden measurements: still listed, not drawn. */
-#measure-list .measure-item.off .summary {
-  opacity: 0.45;
-}
-
-#measure-list .measure-head input[type='checkbox'] {
-  flex: none;
-  margin: 0;
-  accent-color: var(--vscode-button-background);
+.card .list-head label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
 }
 
-#measure-list .measure-head .summary {
-  flex: 1;
+.card .list-head button {
+  padding: 0 6px;
+  border: none;
+  color: inherit;
+}
+
+.card .list-head input,
+#measure-list .measure-head input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--vscode-button-background);
+  cursor: pointer;
 }
 
 #measure-list .measure-item {
@@ -289,37 +333,81 @@ body {
   background: var(--vscode-list-inactiveSelectionBackground);
 }
 
-#measure-list .measure-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  cursor: pointer;
-}
-
 #measure-list .measure-item:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
-#measure-list .measure-item .deltas {
-  display: block;
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.85em;
+/* checkbox · icon · number · name (shrinks, ellipsis) · value · remove or code */
+#measure-list .measure-head {
+  display: grid;
+  grid-template-columns: auto 12px auto minmax(0, 1fr) auto 2.4em;
+  align-items: center;
+  column-gap: 6px;
+  cursor: pointer;
 }
 
 #measure-list .measure-item.code .measure-head {
   cursor: default;
 }
 
+#measure-list .kind {
+  display: flex;
+  color: var(--vscode-descriptionForeground);
+}
+
+#measure-list .kind svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#measure-list .kind svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* The name is quieter than the value, with a gap, so the two don't run together. */
+#measure-list .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--vscode-descriptionForeground);
+}
+
+#measure-list .value {
+  margin-left: 8px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Under the name, so it lines up with it: checkbox (13px) + icon (12px) + two gaps. */
+#measure-list .deltas {
+  padding-left: calc(13px + 12px + 12px);
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+#measure-list .deltas[hidden] {
+  display: none;
+}
+
+/* Hidden measurements: still listed, not drawn. */
+#measure-list .measure-item.off :is(.num, .name, .value, .kind, .deltas) {
+  opacity: 0.45;
+}
+
 #measure-list .code-tag {
-  padding: 0 5px;
-  border-radius: 3px;
-  font-size: 0.8em;
+  justify-self: center;
+  font-size: 0.75em;
   color: #8ee07a;
-  border: 1px solid currentColor;
 }
 
 #measure-list .measure-item button {
+  justify-self: center;
   min-width: 0;
   padding: 0 6px;
   border: none;
@@ -327,7 +415,12 @@ body {
 
 #measure-list .measure-empty {
   color: var(--vscode-descriptionForeground);
-  font-size: 0.9em;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+#measure-list .measure-empty code {
+  font-size: 0.95em;
 }
 
 .card .readout {
@@ -336,7 +429,7 @@ body {
   line-height: 1.3em;
   height: 2.6em;
   overflow: hidden;
-  font-size: 0.9em;
+  font-size: 0.85em;
   font-variant-numeric: tabular-nums;
 }
 
