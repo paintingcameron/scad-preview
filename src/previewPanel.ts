@@ -2,8 +2,10 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { defineArgs, parseCustomizer, pruneValues, type ParamDef, type ParamValue } from './customizer';
+import { DebugPass } from './debugPass';
 import { loadMeasures, measurePath, saveMeasures } from './measureStore';
 import { parseEchoes, parseMeasureEchoes, parseScadMessages, type ScadMessage } from './messages';
+import { hasModifiers } from './modifiers';
 import { getOpenscadVersion, resolveOpenscadPath } from './openscad';
 import {
   parsePresetFile,
@@ -48,6 +50,8 @@ export class PreviewPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly queue: RenderQueue;
+  /** Second pass for `#` and `%` parts, after a full render. */
+  private readonly debug = new DebugPass();
   private readonly disposables: vscode.Disposable[] = [];
   private exe?: string;
   /** Files the last successful render read; saving any of them re-renders. */
@@ -108,6 +112,7 @@ export class PreviewPanel {
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('scadPreview.openscadPath')) void this.resolveAndRender();
         if (e.affectsConfiguration('scadPreview.defaultColor')) this.postSettings();
+        if (e.affectsConfiguration('scadPreview.debugModifiers')) this.render({ delayMs: 0 });
       }),
     );
     this.panel.onDidDispose(() => this.dispose(), null, context.subscriptions);
@@ -116,6 +121,7 @@ export class PreviewPanel {
   private dispose(): void {
     PreviewPanel.panels.delete(this.uri.toString());
     this.queue.dispose();
+    this.debug.dispose();
     this.clearDiagnostics();
     this.services.statusBar.hide();
     for (const d of this.disposables) d.dispose();
@@ -302,6 +308,7 @@ export class PreviewPanel {
   }
 
   private onRenderStart(request: RenderRequest): void {
+    this.debug.cancel(); // its parts would be for the model being replaced
     this.post({ type: 'renderStarted', draft: request.draft ?? false });
     this.setStatus(request.draft ? '$(sync~spin) Draft…' : '$(sync~spin) Rendering…', path.basename(this.uri.fsPath));
   }
@@ -335,7 +342,32 @@ export class PreviewPanel {
       const message = first ?? lastLine(result.output) ?? `OpenSCAD exited with code ${result.exitCode}`;
       this.post({ type: 'renderFailed', message, ms: result.ms });
       this.setStatus('$(error) Render failed', `${name}: ${message}`);
+      return;
     }
+    // A model of only % parts renders empty, so empty results get the second pass too.
+    if (!result.request.draft) void this.runDebugPass(result);
+  }
+
+  /**
+   * Find `#` and `%` parts with a second, slower pass, when the file or one beside it uses them.
+   * Library files are not scanned: BOSL2 and others define helpers with these modifiers, which would
+   * otherwise start the pass for every model that includes them.
+   */
+  private async runDebugPass(result: RenderResult): Promise<void> {
+    const enabled = vscode.workspace.getConfiguration('scadPreview').get<boolean>('debugModifiers', true);
+    const folder = path.dirname(this.uri.fsPath) + path.sep;
+    const own = [this.uri.fsPath, ...result.deps.filter((f) => f.startsWith(folder))];
+    const sources = await Promise.all([...new Set(own)].map((f) => fs.readFile(f, 'utf8').catch(() => '')));
+    if (!enabled || !sources.some(hasModifiers)) {
+      this.post({ type: 'debugParts' });
+      return;
+    }
+    this.post({ type: 'debugStarted' });
+    const { exe, file, args } = result.request;
+    const parts = await this.debug.run({ exe, file, args });
+    if (!parts) return; // cancelled by a newer render
+    for (const error of parts.errors) this.services.output.appendLine(`# / % parts: ${error}`);
+    this.post({ type: 'debugParts', highlight: parts.highlight, background: parts.background, failed: parts.errors.length > 0 });
   }
 
   private showDiagnostics(messages: ScadMessage[]): void {
@@ -433,6 +465,7 @@ export class PreviewPanel {
     <span class="sep"></span>
     <button data-toggle="ortho" title="Orthographic projection">Ortho</button>
     <button data-toggle="edges" title="Show facet edges">Edges</button>
+    <button data-toggle="debug" title="Show # (highlight) and % (background) parts" hidden># %</button>
     <button data-toggle="section" title="Cut the model with a plane">Section</button>
     <button data-toggle="measure" title="Measure distances">Measure</button>
     <span class="spacer"></span>

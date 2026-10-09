@@ -16,7 +16,11 @@ export type ToWebview =
   /** `measures` come from `echo("measure", …)` lines in the model. */
   | { type: 'renderDone'; model: Uint8Array; facets?: number; ms: number; errors: number; warnings: number; draft: boolean; measures: CodeMeasure[] }
   | { type: 'renderEmpty'; ms: number; errors: number; warnings: number; firstProblem?: string }
-  | { type: 'renderFailed'; message: string; ms: number };
+  | { type: 'renderFailed'; message: string; ms: number }
+  /** The second pass for `#` / `%` parts has started; it can take as long as the render. */
+  | { type: 'debugStarted' }
+  /** 3MF meshes of the `#` and `%` parts; none of either clears them. `failed`: see the output channel. */
+  | { type: 'debugParts'; highlight?: Uint8Array; background?: Uint8Array; failed?: boolean };
 
 export type FromWebview =
   | { type: 'ready' }

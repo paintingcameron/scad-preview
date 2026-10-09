@@ -56,6 +56,29 @@ export function buildModel(source: MeshData, defaultColor: Rgba): THREE.Group {
   return group;
 }
 
+/** How OpenSCAD's preview draws them: `#` translucent pink-red, `%` faint grey. */
+const DEBUG_STYLE = {
+  highlight: { color: 0xff3d6e, opacity: 0.45 },
+  background: { color: 0xb4b4b4, opacity: 0.22 },
+};
+
+/** Translucent meshes for the `#` (highlight) and `%` (background) parts, ignoring their own colors. */
+export function buildDebugParts(parts: { highlight?: MeshData; background?: MeshData }): THREE.Group | undefined {
+  const group = new THREE.Group();
+  for (const key of ['background', 'highlight'] as const) {
+    const data = parts[key];
+    if (!data || data.positions.length === 0) continue;
+    const all = Array.from({ length: data.positions.length / 9 }, (_, t) => t);
+    const mesh = new THREE.Mesh(
+      geometryFor(data, all),
+      surfaceMaterial({ ...DEBUG_STYLE[key], transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    mesh.renderOrder = 2; // after the model, including its transparent parts
+    group.add(mesh);
+  }
+  return group.children.length > 0 ? group : undefined;
+}
+
 /** Facet-edge lines for every mesh in the model, or undefined when the model is too large. */
 export function buildEdges(model: THREE.Group, thresholdDeg = 30): THREE.Group | undefined {
   let triangles = 0;

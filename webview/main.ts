@@ -1,7 +1,7 @@
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { Customizer } from './customizer';
 import { Measure } from './measure';
-import { buildModel } from './model';
+import { buildDebugParts, buildModel } from './model';
 import type { SectionState } from './section';
 import { SectionBar } from './sectionBar';
 import { parse3mf, parseHexColor, type MeshData, type Rgba } from './threemf';
@@ -90,21 +90,24 @@ function setParamsOpen(open: boolean): void {
   viewer.setInsets(0, paramsPanel.hidden ? 0 : paramsPanel.offsetWidth);
 }
 
-const toggles = { ortho: false, edges: true };
+const toggles = { ortho: false, edges: true, debug: true };
+const debugButton = document.querySelector<HTMLButtonElement>('[data-toggle="debug"]')!;
+const DEBUG_BADGE = 'Finding # / % parts…';
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('#toolbar button')) {
   const { action, view, toggle } = button.dataset;
-  if (toggle === 'ortho' || toggle === 'edges') button.classList.toggle('on', toggles[toggle]);
+  if (toggle === 'ortho' || toggle === 'edges' || toggle === 'debug') button.classList.toggle('on', toggles[toggle]);
   button.addEventListener('click', () => {
     if (action === 'fit') viewer.fit();
     if (action === 'rerender') vscode.postMessage({ type: 'rerender' });
     if (view) viewer.setView(view as ViewName);
     if (toggle === 'params') setParamsOpen(paramsPanel.hidden);
-    if (toggle === 'ortho' || toggle === 'edges') {
+    if (toggle === 'ortho' || toggle === 'edges' || toggle === 'debug') {
       toggles[toggle] = !toggles[toggle];
       button.classList.toggle('on', toggles[toggle]);
       if (toggle === 'ortho') viewer.setOrthographic(toggles.ortho);
-      else viewer.setEdges(toggles.edges);
+      else if (toggle === 'edges') viewer.setEdges(toggles.edges);
+      else viewer.setDebugVisible(toggles.debug);
     }
   });
 }
@@ -193,6 +196,24 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       );
       $('stats').textContent = formatStats(undefined, msg.ms, msg.errors, msg.warnings);
       break;
+    case 'debugStarted':
+      showBadge(DEBUG_BADGE);
+      break;
+    case 'debugParts': {
+      if (badge.textContent === DEBUG_BADGE) showBadge(undefined);
+      try {
+        const parts = buildDebugParts({
+          highlight: msg.highlight && parse3mf(msg.highlight),
+          background: msg.background && parse3mf(msg.background),
+        });
+        viewer.setDebugParts(parts);
+        debugButton.hidden = !parts;
+      } catch (err) {
+        showBanner(`Could not read the # / % parts: ${String(err)}`);
+      }
+      if (msg.failed) showBadge('Some # / % parts failed: see Output');
+      break;
+    }
     case 'renderFailed':
       showBadge(undefined);
       // Keep the last good model on screen so a typo doesn't wipe the view.

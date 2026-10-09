@@ -84,6 +84,14 @@ modifiers can be handled by extracting the marked subtrees from the CSG, wrappin
 parent transforms, and rendering them as separate meshes. This needs a parser for the simple
 `.csg` format, not for full OpenSCAD.
 
+Found in phase 5 (2026-10-09):
+- **Numbers are rounded to 6 significant digits** (`59.8079`). Rendering `trainer-v2.csg` gives 45,242
+  facets against 42,888 from the `.scad`, so the CSG is not a faithful route for the main model.
+- Exporting the CSG costs a full evaluation (25.7 s on the trainer); rendering from it is quick (2.2 s
+  for the whole trainer, under 1 s for a few marked parts).
+- **Strings are written without escaping**: `text("hi \"q\"")` comes out as `text = "hi "q""`.
+- `*` (disabled) parts are left out of the CSG entirely.
+
 ## Diagnostics
 
 Messages go to stderr in this format, which is easy to turn into editor squiggles:

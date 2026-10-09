@@ -37,6 +37,9 @@ export class Viewer {
   private modelBounds?: THREE.Box3;
   private edges?: THREE.Group;
   private showEdges = true;
+  /** `#` and `%` parts, drawn over the model. */
+  private debugParts?: THREE.Group;
+  private showDebug = true;
   private readonly section: Section;
   private readonly viewCube: ViewCube;
   private sectionState: SectionState = { enabled: false, axis: 'z', offset: 0, flipped: false };
@@ -125,6 +128,27 @@ export class Viewer {
     this.updateEdges();
     this.setGrid(this.modelBounds!);
     if (fit) this.fit();
+  }
+
+  /**
+   * Replace the `#` / `%` parts. They are cut by the section like the model, but aren't part of it:
+   * not in its bounds, not picked by measuring, and not in the section cap.
+   */
+  setDebugParts(parts: THREE.Group | undefined): void {
+    if (this.debugParts) {
+      this.scene.remove(this.debugParts);
+      disposeTree(this.debugParts);
+    }
+    this.debugParts = parts;
+    if (!parts) return;
+    this.applyClipping(parts);
+    parts.visible = this.showDebug;
+    this.scene.add(parts);
+  }
+
+  setDebugVisible(on: boolean): void {
+    this.showDebug = on;
+    if (this.debugParts) this.debugParts.visible = on;
   }
 
   /**

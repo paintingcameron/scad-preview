@@ -177,6 +177,17 @@ Section off it is the whole model.
 - Toggle in the toolbar to hide debug overlays.
 - **Done when**: the probe model shows the pink cylinder through the box and the gray cube beside it.
 
+**Status: built (2026-10-09), awaiting a hands-on check.** Changes from the plan:
+- Not a second `-o` on the render run (that doubles every render). A separate pass runs after each
+  full render, only when the file or a file in its folder uses `#` / `%` (`hasModifiers`, which tells
+  the `%` modifier from modulo). It costs one more evaluation (~25 s on the trainer), shows a badge
+  while it runs, and is cancelled by the next render. `scadPreview.debugModifiers` turns it off.
+- Library files are not scanned: BOSL2 defines helpers such as `ghost()` with `%children()`, which
+  would start the pass for every BOSL2 model. Markers applied through such helpers aren't shown.
+- The main model is still rendered from the `.scad`, not from the `.csg`: the CSG export rounds numbers
+  to 6 significant digits, which changes the mesh (42,888 vs 45,242 facets on the trainer).
+- All `#` parts render as one mesh and all `%` parts as another. 2D parts (inside an extrude) are skipped.
+
 ### Phase 6: Speed and polish
 
 - **Cache**: key = hash(source + every file in the `-d` deps list + parameters + `$fn` override) → stored 3MF.

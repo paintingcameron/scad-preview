@@ -66,6 +66,11 @@
           "default": 16,
           "minimum": 0,
           "markdownDescription": "While a customizer slider is being dragged, render with `$fn` set to this for speed, then do one full render on release. `0` turns draft renders off."
+        },
+        "scadPreview.debugModifiers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show `#` (highlight) and `%` (background) parts. When the file or a file next to it uses them, a second pass runs after each full render, about as long as the render itself, and the parts appear when it finishes."
         }
       }
     }
