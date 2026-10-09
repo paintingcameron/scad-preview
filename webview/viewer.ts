@@ -79,7 +79,29 @@ export class Viewer {
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
       viewCube.render(this.renderer, this.camera, w);
+      for (const callback of this.frameCallbacks) callback();
     });
+  }
+
+  private readonly frameCallbacks: (() => void)[] = [];
+
+  /** Run after every frame is drawn, e.g. to move HTML overlays with the camera. */
+  onFrame(callback: () => void): void {
+    this.frameCallbacks.push(callback);
+  }
+
+  /** The nearest model surface along the ray, or undefined. */
+  pickModel(raycaster: THREE.Raycaster): THREE.Intersection | undefined {
+    if (!this.model) return undefined;
+    return raycaster.intersectObject(this.model, true).find((hit) => hit.object instanceof THREE.Mesh);
+  }
+
+  get canvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
+  }
+
+  get activeCamera(): THREE.Camera {
+    return this.camera;
   }
 
   /** Replace the model. The camera only moves when `fit` is true (the first render). */

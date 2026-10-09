@@ -138,6 +138,25 @@ Webview side:
   and the across-flats size so the `$fn` error is visible.
 - **Done when**: you can slice a printed part at a hole and read its diameter and wall thickness correctly against hand calculation.
 
+**Status: done (2026-10-09).** Changes from the plan:
+- No separate 2D view. Measuring happens in the 3D view: with Section on, points land on the cut and
+  snap to its outline (corners, hole centres, edges); with Section off, they land on the surface and
+  snap to mesh corners. Snapping only happens near a feature; Alt gives a free point.
+- Distance only so far, with hole Ø shown while hovering a centre. Wall thickness, angle and
+  bounding box moved to phase 4b. No clipboard or SVG/DXF export.
+- Added: a list of measurements with per-item show/hide, delete and rename; typed points (absolute
+  or relative to the first point); editable coordinates; measurements from the model itself with
+  `echo("measure", a, b, "label")`; saved per model in `.scad-preview/<model>.measure.json`.
+- Measurements stay on the model when the Measure card is closed.
+
+### Phase 4b: More measuring tools
+
+- **Wall thickness**: click one surface (or a cut edge) and get the distance straight through the
+  material to the other side.
+- **Angle**: three points (arm, corner, arm).
+- **Bounding box**: of one cut outline (with Ø when it's round), or of the whole model.
+- Each is saved and listed like a distance.
+
 ### Phase 5: Debug modifiers
 
 - Add `-o model.csg` to the render run.

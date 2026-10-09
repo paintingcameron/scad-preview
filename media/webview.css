@@ -53,17 +53,25 @@ body {
   flex: 1;
 }
 
-/* Section panel: a compact card in the top-left corner rather than a full-height panel: it's short, so it hides little. */
-#sectionbar {
+/* Floating cards (Section, Measure) stacked in the top-left corner; short, so they hide little. */
+#left-cards {
   position: absolute;
   top: 8px;
   left: 8px;
+  bottom: 8px;
   z-index: 2;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  width: 260px; /* room for three "-120.00" coordinate fields plus Add */
+  pointer-events: none; /* only the cards themselves take clicks */
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  width: 180px;
-  max-height: calc(100% - 16px);
+  min-height: 0;
   box-sizing: border-box;
   padding: 8px 10px 10px;
   border: 1px solid var(--vscode-panel-border);
@@ -71,40 +79,46 @@ body {
   background: color-mix(in srgb, var(--vscode-sideBar-background, var(--vscode-editor-background)) 94%, transparent);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   font-size: calc(var(--vscode-font-size) * 1.1);
-  overflow-y: auto;
+  pointer-events: auto;
 }
 
-#sectionbar .panel-title {
+.card .panel-title {
   font-size: 1.12em;
   font-weight: 600;
 }
 
-#sectionbar .field-label,
-#sectionbar .unit {
+.card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card .field-label,
+.card .unit {
   color: var(--vscode-descriptionForeground);
 }
 
-#sectionbar .field-label {
+.card .field-label {
   margin-top: 4px;
   font-size: 0.9em;
 }
 
-#sectionbar .axis-row {
+.card .axis-row {
   display: flex;
   gap: 4px;
 }
 
-#sectionbar .axis-row button {
+.card .axis-row button {
   flex: 1;
 }
 
-#sectionbar .value-row {
+.card .value-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-#sectionbar button {
+.card button {
   min-width: 26px;
   padding: 3px 8px;
   border: 1px solid var(--vscode-panel-border);
@@ -115,17 +129,295 @@ body {
   cursor: pointer;
 }
 
-#sectionbar button.wide {
+.card button.wide {
   margin-top: 6px;
 }
 
-#sectionbar button:hover {
+.card button:hover {
   background: var(--vscode-toolbar-hoverBackground);
 }
 
-#sectionbar button.on {
+.card button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.card button.on {
   background: var(--vscode-inputOption-activeBackground);
   border-color: var(--vscode-inputOption-activeBorder);
+}
+
+/* The measure card grows with its list and scrolls when the list is long. */
+#measurecard {
+  flex: 0 1 auto;
+}
+
+#measure-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* X/Y/Z number fields in a row: manual entry and editing a measurement's points. */
+.card .xyz {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.card .xyz input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 3px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield; /* no spinner arrows; they eat the room the digits need */
+}
+
+.card .xyz input::-webkit-inner-spin-button,
+.card .xyz input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.card .xyz .point-name {
+  width: 1.2em;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.card .name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card .name-row .point-name {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.card .name-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 3px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 0.9em;
+}
+
+.card .entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 4px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.card .entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card .entry-head .field-label {
+  margin-top: 0;
+}
+
+.card .entry-head label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.card .entry-head input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--vscode-button-background);
+}
+
+.card .list-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.card .list-actions[hidden] {
+  display: none;
+}
+
+.card .list-actions button {
+  flex: 1;
+}
+
+/* Hidden measurements: still listed, not drawn. */
+#measure-list .measure-item.off .summary {
+  opacity: 0.45;
+}
+
+#measure-list .measure-head input[type='checkbox'] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--vscode-button-background);
+  cursor: pointer;
+}
+
+#measure-list .measure-head .summary {
+  flex: 1;
+}
+
+#measure-list .measure-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+#measure-list .measure-item.open {
+  padding-bottom: 6px;
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+#measure-list .measure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+}
+
+#measure-list .measure-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+#measure-list .measure-item .deltas {
+  display: block;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+#measure-list .measure-item.code .measure-head {
+  cursor: default;
+}
+
+#measure-list .code-tag {
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  color: #8ee07a;
+  border: 1px solid currentColor;
+}
+
+#measure-list .measure-item button {
+  min-width: 0;
+  padding: 0 6px;
+  border: none;
+}
+
+#measure-list .measure-empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.card .readout {
+  /* Always two lines (coordinates, then snap), so the card never changes height while hovering. */
+  white-space: pre;
+  line-height: 1.3em;
+  height: 2.6em;
+  overflow: hidden;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+.card .hint {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  line-height: 1.35;
+}
+
+/* Measuring overlay: drawn in screen space over the canvas, follows the camera every frame. */
+#measure-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+#measure-overlay .m-line {
+  stroke: #ffd24d;
+  stroke-width: 1.5;
+}
+
+#measure-overlay .m-line.live {
+  stroke-dasharray: 5 4;
+}
+
+/* From echo("measure", …) in the file. */
+#measure-overlay .m-line.code {
+  stroke: #8ee07a;
+}
+
+#measure-overlay .m-line.highlight {
+  stroke: #4dd2ff;
+  stroke-width: 3;
+}
+
+#measure-overlay .m-end {
+  fill: #ffd24d;
+  stroke: #000;
+  stroke-width: 1;
+}
+
+#measure-overlay .m-label,
+#measure-overlay .m-sub {
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 3px;
+  paint-order: stroke;
+  font-family: var(--vscode-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+#measure-overlay .m-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#measure-overlay .m-sub {
+  font-size: 11px;
+}
+
+#measure-overlay .snap {
+  fill: none;
+  stroke: #4dd2ff;
+  stroke-width: 2;
+}
+
+#measure-overlay .free {
+  fill: #4dd2ff;
+}
+
+canvas.measuring {
+  cursor: crosshair;
+}
+
+#badge,
+#banner {
+  z-index: 2;
 }
 
 #section-slider {

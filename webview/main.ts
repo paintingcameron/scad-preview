@@ -1,5 +1,6 @@
 import type { FromWebview, ToWebview } from '../src/protocol';
 import { Customizer } from './customizer';
+import { Measure } from './measure';
 import { buildModel } from './model';
 import type { SectionState } from './section';
 import { SectionBar } from './sectionBar';
@@ -38,17 +39,45 @@ const customizer = new Customizer(paramsPanel, {
   deletePreset: () => vscode.postMessage({ type: 'deletePreset' }),
 });
 
+const measure = new Measure(viewer, $('viewport'), {
+  toggle: document.querySelector<HTMLButtonElement>('[data-toggle="measure"]')!,
+  card: $('measurecard'),
+  readout: $('measure-readout'),
+  list: $('measure-list'),
+  clearAll: $('measure-clear') as HTMLButtonElement,
+  listActions: $('measure-list-actions'),
+  showAll: $('measure-show-all') as HTMLButtonElement,
+  hideAll: $('measure-hide-all') as HTMLButtonElement,
+  entry: {
+    label: $('entry-label'),
+    x: $('entry-x') as HTMLInputElement,
+    y: $('entry-y') as HTMLInputElement,
+    z: $('entry-z') as HTMLInputElement,
+    relative: $('entry-relative') as HTMLInputElement,
+    add: $('entry-add') as HTMLButtonElement,
+  },
+});
+
+// Saved to .scad-preview/<model>.measure.json; batched so typing a name doesn't write every key.
+let measureSaveTimer: ReturnType<typeof setTimeout> | undefined;
+measure.onChange = () => {
+  clearTimeout(measureSaveTimer);
+  measureSaveTimer = setTimeout(() => vscode.postMessage({ type: 'saveMeasures', saved: measure.getSaved() }), 300);
+};
+
 const sectionBar = new SectionBar(
   $('sectionbar'),
   document.querySelector<HTMLButtonElement>('[data-toggle="section"]')!,
   uiState.section,
   (state) => {
     viewer.setSection(state);
+    measure.setSection(state);
     uiState.section = state;
     vscode.setState(uiState);
   },
 );
 viewer.setSection(sectionBar.current);
+measure.setSection(sectionBar.current);
 
 function setParamsOpen(open: boolean): void {
   paramsPanel.hidden = !open || customizer.isEmpty;
@@ -115,6 +144,9 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
     case 'presets':
       customizer.setPresets(msg.names, msg.selected);
       break;
+    case 'measures':
+      measure.load(msg.saved);
+      break;
     case 'status': {
       const el = $('version');
       el.textContent = msg.version ? `OpenSCAD ${msg.version}` : `OpenSCAD not found (${msg.openscadPath})`;
@@ -133,6 +165,8 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
         const started = performance.now();
         lastData = parse3mf(msg.model);
         viewer.setModel(buildModel(lastData, defaultColor), !hasModel);
+        measure.setModel(lastData.positions);
+        measure.setCodeMeasures(msg.measures);
         sectionBar.setBounds(viewer.bounds);
         hasModel = true;
         showBanner(undefined);
@@ -147,6 +181,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
     case 'renderEmpty':
       showBadge(undefined);
       viewer.setModel(undefined, false);
+      measure.setModel(undefined);
       hasModel = false;
       lastData = undefined;
       showBanner(

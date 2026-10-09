@@ -57,6 +57,44 @@ export function parseEchoes(output: string): string[] {
     .map((l) => l.slice(6));
 }
 
+export type Vec3 = [number, number, number];
+
+/** A measurement the model asks for with `echo("measure", a, b, label)`. */
+export interface CodeMeasure {
+  a: Vec3;
+  b: Vec3;
+  label?: string;
+}
+
+const NUM = String.raw`-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?`;
+const POINT = String.raw`\[\s*(${NUM})\s*,\s*(${NUM})\s*(?:,\s*(${NUM})\s*)?\]`;
+/** OpenSCAD prints strings without escaping inner quotes, so the label runs to the last quote. */
+const MEASURE = new RegExp(String.raw`^"measure",\s*${POINT},\s*${POINT}(?:,\s*(?:undef|"(.*)"))?\s*$`, 'i');
+
+/**
+ * Measurements requested by echo lines (as returned by parseEchoes). 2D points get Z = 0.
+ * Echoes tagged "measure" that don't match the expected shape are returned as `bad`.
+ */
+export function parseMeasureEchoes(echoes: string[]): { measures: CodeMeasure[]; bad: string[] } {
+  const measures: CodeMeasure[] = [];
+  const bad: string[] = [];
+  for (const echo of echoes) {
+    if (!echo.startsWith('"measure"')) continue;
+    const m = MEASURE.exec(echo);
+    if (!m) {
+      bad.push(echo);
+      continue;
+    }
+    const n = (s: string | undefined): number => (s === undefined ? 0 : Number(s));
+    measures.push({
+      a: [n(m[1]), n(m[2]), n(m[3])],
+      b: [n(m[4]), n(m[5]), n(m[6])],
+      label: m[7] || undefined,
+    });
+  }
+  return { measures, bad };
+}
+
 /**
  * Parse a make-style dependency file written by `openscad -d`:
  * `target: \` followed by one escaped path per continuation line.

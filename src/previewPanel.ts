@@ -2,7 +2,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { defineArgs, parseCustomizer, pruneValues, type ParamDef, type ParamValue } from './customizer';
-import { parseEchoes, parseScadMessages, type ScadMessage } from './messages';
+import { loadMeasures, measurePath, saveMeasures } from './measureStore';
+import { parseEchoes, parseMeasureEchoes, parseScadMessages, type ScadMessage } from './messages';
 import { getOpenscadVersion, resolveOpenscadPath } from './openscad';
 import {
   parsePresetFile,
@@ -60,6 +61,7 @@ export class PreviewPanel {
   private defsKey = '';
   private values: Record<string, ParamValue> = {};
   private presets: PresetFile = parsePresetFile(undefined);
+  private measureWrite: Promise<void> = Promise.resolve();
   private selectedPreset?: string;
   private renderSeq = 0;
 
@@ -129,8 +131,17 @@ export class PreviewPanel {
         this.post({ type: 'file', name: path.basename(this.uri.fsPath) });
         this.postSettings();
         void this.loadPresets();
+        void loadMeasures(this.uri.fsPath).then((saved) => this.post({ type: 'measures', saved }));
         void this.resolveAndRender();
         break;
+      case 'saveMeasures': {
+        // One write at a time, in order, so a slow write can't land after a newer one.
+        const saved = msg.saved;
+        this.measureWrite = this.measureWrite
+          .then(() => saveMeasures(this.uri.fsPath, saved))
+          .catch((err) => this.services.output.appendLine(`Could not save measurements to ${measurePath(this.uri.fsPath)}: ${String(err)}`));
+        break;
+      }
       case 'rerender':
         this.render({ delayMs: 0 });
         break;
@@ -309,7 +320,8 @@ export class PreviewPanel {
     if (result.ok && result.model) {
       const facets = result.summary?.geometry?.facets;
       const draft = result.request.draft ?? false;
-      this.post({ type: 'renderDone', model: result.model, facets, ms: result.ms, errors, warnings, draft });
+      const { measures } = parseMeasureEchoes(parseEchoes(result.output));
+      this.post({ type: 'renderDone', model: result.model, facets, ms: result.ms, errors, warnings, draft, measures });
       const icon = errors > 0 || warnings > 0 ? '$(warning)' : '$(check)';
       this.setStatus(`${icon} ${facets ?? '?'} facets · ${seconds}${draft ? ' · draft' : ''}`, `${name}${problems}`);
     } else if (result.empty) {
@@ -365,7 +377,11 @@ export class PreviewPanel {
     const out = this.services.output;
     const time = new Date().toLocaleTimeString();
     out.appendLine(`── ${path.basename(this.uri.fsPath)} · ${time} · ${(result.ms / 1000).toFixed(2)} s · exit ${result.exitCode}`);
-    for (const echo of parseEchoes(result.output)) out.appendLine(`ECHO: ${echo}`);
+    const echoes = parseEchoes(result.output);
+    for (const echo of echoes) out.appendLine(`ECHO: ${echo}`);
+    for (const bad of parseMeasureEchoes(echoes).bad) {
+      out.appendLine(`Ignored measure echo (expected "measure", [x, y, z], [x, y, z], "label"): ${bad}`);
+    }
     for (const line of result.output.split(/\r?\n/)) {
       if (/^(ERROR|WARNING|DEPRECATED|TRACE):/.test(line)) out.appendLine(line);
     }
@@ -418,12 +434,14 @@ export class PreviewPanel {
     <button data-toggle="ortho" title="Orthographic projection">Ortho</button>
     <button data-toggle="edges" title="Show facet edges">Edges</button>
     <button data-toggle="section" title="Cut the model with a plane">Section</button>
+    <button data-toggle="measure" title="Measure distances">Measure</button>
     <span class="spacer"></span>
     <button data-action="rerender" title="Render again">Render</button>
     <button data-toggle="params" title="Show customizer parameters" hidden>Parameters</button>
   </div>
   <div id="main">
-    <div id="sectionbar" hidden>
+    <div id="left-cards">
+    <div id="sectionbar" class="card" hidden>
       <div class="panel-title">Section</div>
       <div class="field-label">Cut along</div>
       <div class="axis-row">
@@ -438,6 +456,29 @@ export class PreviewPanel {
         <span class="unit">mm</span>
       </div>
       <button id="section-flip" class="wide">Flip side</button>
+    </div>
+    <div id="measurecard" class="card" hidden>
+      <div class="card-head">
+        <span class="panel-title">Measure</span>
+        <button id="measure-clear" title="Remove all measurements">Clear all</button>
+      </div>
+      <div id="measure-readout" class="readout"></div>
+      <div class="entry">
+        <div class="entry-head">
+          <span id="entry-label" class="field-label">First point</span>
+          <label title="Offset from the first point instead of absolute coordinates"><input id="entry-relative" type="checkbox"> relative</label>
+        </div>
+        <div class="xyz">
+          <input id="entry-x" type="number" step="any" title="X" placeholder="X">
+          <input id="entry-y" type="number" step="any" title="Y" placeholder="Y">
+          <input id="entry-z" type="number" step="any" title="Z" placeholder="Z">
+          <button id="entry-add" title="Add this point (Enter)">Add</button>
+        </div>
+      </div>
+      <div id="measure-list-actions" class="list-actions" hidden><button id="measure-show-all">Show all</button><button id="measure-hide-all">Hide all</button></div>
+      <div id="measure-list"></div>
+      <div class="hint">Click two points. With Section on they lie on the cut. Snaps near corners, hole centres and edges; hold Alt for a free point. Esc cancels. From the file: <code>echo("measure", [x,y,z], [x,y,z], "label");</code></div>
+    </div>
     </div>
     <div id="viewport">
       <div id="badge" hidden></div>
