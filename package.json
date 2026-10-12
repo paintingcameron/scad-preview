@@ -113,7 +113,10 @@
         },
         "scadPreview.layout.toolsSide": {
           "type": "string",
-          "enum": ["left", "right"],
+          "enum": [
+            "left",
+            "right"
+          ],
           "default": "left",
           "markdownDescription": "Side for the Section and Measure panels. On the same side as Parameters, they sit next to it."
         },
@@ -126,7 +129,10 @@
         },
         "scadPreview.layout.parametersSide": {
           "type": "string",
-          "enum": ["right", "left"],
+          "enum": [
+            "right",
+            "left"
+          ],
           "default": "right",
           "markdownDescription": "Side for the Parameters panel."
         },
@@ -144,7 +150,12 @@
         },
         "scadPreview.viewCube.corner": {
           "type": "string",
-          "enum": ["bottom-right", "bottom-left", "top-right", "top-left"],
+          "enum": [
+            "bottom-right",
+            "bottom-left",
+            "top-right",
+            "top-left"
+          ],
           "default": "bottom-right",
           "markdownDescription": "Corner of the 3D view for the navigation cube and the axes."
         },
@@ -201,7 +212,8 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p webview",
     "test": "vitest run",
-    "vscode:prepublish": "node esbuild.mjs --production"
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package --no-dependencies"
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -211,6 +223,7 @@
     "@types/node": "^22.0.0",
     "@types/three": "^0.170.0",
     "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.28.2",
     "typescript": "^5.6.0",
     "vitest": "^5.0.3"

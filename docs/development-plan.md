@@ -199,7 +199,7 @@ Section off it is the whole model.
 - Screenshot to PNG, and export the current view's STL/3MF with the current parameters.
 - Package as a `.vsix` for local install.
 
-**Status: all but packaging built (2026-10-09), awaiting a hands-on check.**
+**Status: built (2026-10-09); packaging added 2026-10-12 (`npm run package` → `scad-preview-0.0.1.vsix`).**
 - Cache: in memory, shared by panels, 256 MB, least recently used out first. Keyed by program, `-D`
   values and the contents of every file the render read (hashes reused while size and mtime hold),
   stored under the render's own deps so a changed include or library never gives a stale hit. `#` / `%`
