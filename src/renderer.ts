@@ -77,11 +77,22 @@ export class RenderQueue {
     this.timer = setTimeout(() => void this.run(req), delayMs);
   }
 
-  dispose(): void {
+  /** Stop the render in progress and drop any waiting one; neither reports a result. */
+  cancel(): void {
     clearTimeout(this.timer);
     this.pending = undefined;
     this.generation++;
+    this.activeGeneration = undefined;
     this.kill();
+  }
+
+  /** A render is running (not just waiting out its delay). */
+  get busy(): boolean {
+    return this.activeGeneration !== undefined;
+  }
+
+  dispose(): void {
+    this.cancel();
     void this.workDir?.then((dir) => fs.rm(dir, { recursive: true, force: true }));
   }
 

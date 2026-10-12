@@ -1,36 +1,10 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { SavedMeasurement, SavedMeasures, Vec3 } from './sharedTypes';
 
-type Vec3 = [number, number, number];
+export type { MeasureKind, SavedMeasurement, SavedMeasures } from './sharedTypes';
 
-export type MeasureKind = 'distance' | 'wall' | 'angle' | 'box';
 const KINDS: readonly string[] = ['distance', 'wall', 'angle', 'box'];
-
-/**
- * A measurement added in the preview (clicked or typed), as saved.
- * - distance, wall: from a to b. `kind` is left out for a distance.
- * - angle: at the corner b, between a and c.
- * - box: a is the low corner, b the high one; `diameter` when the outline it came from is round.
- */
-export interface SavedMeasurement {
-  kind?: Exclude<MeasureKind, 'distance'>;
-  a: Vec3;
-  b: Vec3;
-  c?: Vec3;
-  diameter?: number;
-  label?: string;
-  hidden?: boolean;
-}
-
-/**
- * A model's measurements: `.scad-preview/<model>.measure.json` in the model's folder, so they
- * travel with the project. Code measurements are rebuilt on every render; only the keys of the
- * ones the user hid are kept.
- */
-export interface SavedMeasures {
-  measurements: SavedMeasurement[];
-  hiddenCode: string[];
-}
 
 export function measurePath(scadFile: string): string {
   return path.join(path.dirname(scadFile), '.scad-preview', `${path.basename(scadFile, '.scad')}.measure.json`);

@@ -1,4 +1,4 @@
-import type { FromWebview, ToWebview } from '../src/protocol';
+import type { FromWebview, PreviewSettings, ToWebview } from '../src/protocol';
 import { Customizer } from './customizer';
 import { Measure } from './measure';
 import { buildDebugParts, buildModel } from './model';
@@ -24,6 +24,9 @@ const uiState: UiState = vscode.getState() ?? {};
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
 const viewer = new Viewer($('viewport'));
 const badge = $('badge');
+const badgeText = $('badge-text');
+const badgeCancel = $('badge-cancel') as HTMLButtonElement;
+badgeCancel.addEventListener('click', () => vscode.postMessage({ type: 'cancelRender' }));
 const banner = $('banner');
 const paramsPanel = $('params');
 const paramsButton = document.querySelector<HTMLButtonElement>('[data-toggle="params"]')!;
@@ -86,44 +89,129 @@ function setParamsOpen(open: boolean): void {
   paramsButton.classList.toggle('on', open);
   uiState.paramsOpen = open;
   vscode.setState(uiState);
-  // The panel floats over the right of the view; keep the model and view cube clear of it.
-  viewer.setInsets(0, paramsPanel.hidden ? 0 : paramsPanel.offsetWidth);
+  layout();
+}
+
+/**
+ * Place the floating panels on their sides (settings). The Section/Measure cards sit next to the
+ * Parameters panel when both are on the same side; the view cube and badges keep clear of it.
+ */
+function layout(): void {
+  const paramsLeft = settings?.parametersSide === 'left';
+  const toolsRight = settings?.toolsSide === 'right';
+  document.body.classList.toggle('params-left', paramsLeft);
+  const paramsWidth = paramsPanel.hidden ? 0 : paramsPanel.offsetWidth;
+  const offset = `${8 + (toolsRight !== paramsLeft ? paramsWidth : 0)}px`;
+  const cards = $('left-cards');
+  cards.style.left = toolsRight ? 'auto' : offset;
+  cards.style.right = toolsRight ? offset : 'auto';
+  viewer.setInsets(paramsLeft ? paramsWidth : 0, paramsLeft ? 0 : paramsWidth);
+}
+
+let settings: PreviewSettings | undefined;
+/** The last # / % parts, kept so a color change can redraw them. */
+let lastDebug: { highlight?: MeshData; background?: MeshData } = {};
+
+function showDebugParts(): void {
+  const parts = buildDebugParts(lastDebug, {
+    highlight: settings?.highlightColor ?? '#ff3d6e',
+    background: settings?.backgroundPartColor ?? '#b4b4b4',
+  });
+  viewer.setDebugParts(parts);
+  debugButton.hidden = !parts;
+}
+
+/** Apply the scadPreview.* settings; they arrive when the panel opens and on every change. */
+function applySettings(next: PreviewSettings): void {
+  const first = settings === undefined;
+  settings = next;
+  const root = document.documentElement.style;
+  if (next.fontSize > 0) root.setProperty('--ui-font-size', `${next.fontSize}px`);
+  else root.removeProperty('--ui-font-size');
+  root.setProperty('--tools-width', `${next.toolsWidth}px`);
+  root.setProperty('--params-width', `${next.parametersWidth}px`);
+  root.setProperty('--measure-color', next.measureColor);
+  root.setProperty('--measure-code-color', next.codeMeasureColor);
+  root.setProperty('--measure-label-size', `${next.measureLabelSize}px`);
+  viewer.setBackground(next.background || undefined);
+  viewer.configureViewCube({ ...next.viewCube, axes: next.axes });
+
+  const color = parseHexColor(next.defaultColor);
+  if (lastData && (color.r !== defaultColor.r || color.g !== defaultColor.g || color.b !== defaultColor.b)) {
+    defaultColor = color;
+    viewer.setModel(buildModel(lastData, defaultColor), false);
+    measure.setModel(lastData.positions);
+  }
+  defaultColor = color;
+  showDebugParts();
+  // Projection and edges are where a preview starts; after that the toolbar buttons decide.
+  if (first) {
+    setToggle('ortho', next.orthographic);
+    setToggle('edges', next.edges);
+  }
+  layout();
 }
 
 const toggles = { ortho: false, edges: true, debug: true };
+type ToggleName = keyof typeof toggles;
 const debugButton = document.querySelector<HTMLButtonElement>('[data-toggle="debug"]')!;
 const DEBUG_BADGE = 'Finding # / % parts…';
 
+/** Switch a toolbar toggle and what it controls. */
+function setToggle(name: ToggleName, on: boolean): void {
+  toggles[name] = on;
+  document.querySelector(`[data-toggle="${name}"]`)?.classList.toggle('on', on);
+  if (name === 'ortho') viewer.setOrthographic(on);
+  else if (name === 'edges') viewer.setEdges(on);
+  else viewer.setDebugVisible(on);
+}
+
 for (const button of document.querySelectorAll<HTMLButtonElement>('#toolbar button')) {
   const { action, view, toggle } = button.dataset;
-  if (toggle === 'ortho' || toggle === 'edges' || toggle === 'debug') button.classList.toggle('on', toggles[toggle]);
+  if (toggle && toggle in toggles) button.classList.toggle('on', toggles[toggle as ToggleName]);
   button.addEventListener('click', () => {
     if (action === 'fit') viewer.fit();
     if (action === 'rerender') vscode.postMessage({ type: 'rerender' });
+    if (action === 'export') vscode.postMessage({ type: 'export' });
     if (view) viewer.setView(view as ViewName);
     if (toggle === 'params') setParamsOpen(paramsPanel.hidden);
-    if (toggle === 'ortho' || toggle === 'edges' || toggle === 'debug') {
-      toggles[toggle] = !toggles[toggle];
-      button.classList.toggle('on', toggles[toggle]);
-      if (toggle === 'ortho') viewer.setOrthographic(toggles.ortho);
-      else if (toggle === 'edges') viewer.setEdges(toggles.edges);
-      else viewer.setDebugVisible(toggles.debug);
-    }
+    if (toggle && toggle in toggles) setToggle(toggle as ToggleName, !toggles[toggle as ToggleName]);
   });
 }
 
-function showBadge(text: string | undefined): void {
+let badgeTimer: ReturnType<typeof setInterval> | undefined;
+/** How long the last full render took, to say roughly how long the next one will. */
+let lastFullMs: number | undefined;
+
+/**
+ * The pill at the top right. `since` adds a running clock ("Rendering… 12 s of ~25 s");
+ * `cancellable` adds a Cancel button.
+ */
+function showBadge(text: string | undefined, { since, cancellable = false }: { since?: number; cancellable?: boolean } = {}): void {
+  clearInterval(badgeTimer);
+  badgeTimer = undefined;
   badge.hidden = !text;
-  badge.textContent = text ?? '';
+  badgeCancel.hidden = !cancellable;
+  badge.dataset.text = text ?? '';
+  const update = () => {
+    const elapsed = since === undefined ? '' : ` ${Math.floor((performance.now() - since) / 1000)} s`;
+    const estimate = since !== undefined && lastFullMs !== undefined && lastFullMs >= 2000 ? ` of ~${Math.round(lastFullMs / 1000)} s` : '';
+    badgeText.textContent = `${text ?? ''}${elapsed}${estimate}`;
+  };
+  update();
+  if (text && since !== undefined) badgeTimer = setInterval(update, 1000);
 }
+
+/** Above this the view gets sluggish on most machines (edges already switch off at 500k triangles). */
+const LARGE_FACETS = 1_000_000;
 
 function showBanner(text: string | undefined): void {
   banner.hidden = !text;
   banner.textContent = text ?? '';
 }
 
-function formatStats(facets: number | undefined, ms: number, errors: number, warnings: number): string {
-  const parts = [facets !== undefined ? `${facets.toLocaleString()} facets` : undefined, `${(ms / 1000).toFixed(2)} s`];
+function formatStats(facets: number | undefined, ms: number, errors: number, warnings: number, cached = false): string {
+  const parts = [facets !== undefined ? `${facets.toLocaleString()} facets` : undefined, cached ? 'cached' : `${(ms / 1000).toFixed(2)} s`];
   if (errors) parts.push(`${errors} error${errors > 1 ? 's' : ''}`);
   if (warnings) parts.push(`${warnings} warning${warnings > 1 ? 's' : ''}`);
   return parts.filter(Boolean).join(' · ');
@@ -136,8 +224,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       $('file').textContent = msg.name;
       break;
     case 'settings':
-      defaultColor = parseHexColor(msg.defaultColor);
-      if (lastData) viewer.setModel(buildModel(lastData, defaultColor), false);
+      applySettings(msg.settings);
       break;
     case 'params': {
       customizer.setParams(msg.defs, msg.values);
@@ -161,9 +248,21 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       break;
     }
     case 'renderStarted':
-      showBadge(msg.draft ? 'Draft…' : 'Rendering…');
+      // Drafts are quick and replace each other while dragging; only full renders get a clock and Cancel.
+      showBadge(msg.draft ? 'Draft…' : 'Rendering…', msg.draft ? {} : { since: performance.now(), cancellable: true });
+      break;
+    case 'renderCancelled':
+      showBadge(undefined);
+      $('stats').textContent = 'cancelled';
+      break;
+    case 'captureScreenshot':
+      void viewer
+        .screenshot()
+        .then((png) => vscode.postMessage({ type: 'screenshot', png }))
+        .catch(() => vscode.postMessage({ type: 'screenshot' }));
       break;
     case 'renderDone': {
+      if (!msg.draft && !msg.cached) lastFullMs = msg.ms;
       // A draft result stays labelled until the full render replaces it.
       showBadge(msg.draft ? 'Draft' : undefined);
       try {
@@ -176,8 +275,17 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
         hasModel = true;
         showBanner(undefined);
         const loadMs = performance.now() - started;
-        $('stats').textContent = `${formatStats(msg.facets, msg.ms, msg.errors, msg.warnings)}${msg.draft ? ' · draft' : ''}`;
-        $('stats').title = `OpenSCAD ${msg.ms} ms · load ${loadMs.toFixed(0)} ms`;
+        const stats = $('stats');
+        const large = (msg.facets ?? 0) > LARGE_FACETS;
+        stats.textContent = `${formatStats(msg.facets, msg.ms, msg.errors, msg.warnings, msg.cached)}${msg.draft ? ' · draft' : ''}${large ? ' · large' : ''}`;
+        stats.classList.toggle('warn', large);
+        stats.title = [
+          msg.cached ? `From the cache (rendered in ${msg.ms} ms)` : `OpenSCAD ${msg.ms} ms`,
+          `load ${loadMs.toFixed(0)} ms`,
+          large ? 'Over a million facets: turning and measuring may be slow' : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
       } catch (err) {
         showBanner(`Could not read the rendered model: ${String(err)}`);
       }
@@ -197,17 +305,16 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       $('stats').textContent = formatStats(undefined, msg.ms, msg.errors, msg.warnings);
       break;
     case 'debugStarted':
-      showBadge(DEBUG_BADGE);
+      showBadge(DEBUG_BADGE, { since: performance.now(), cancellable: true });
       break;
     case 'debugParts': {
-      if (badge.textContent === DEBUG_BADGE) showBadge(undefined);
+      if (badge.dataset.text === DEBUG_BADGE) showBadge(undefined);
       try {
-        const parts = buildDebugParts({
+        lastDebug = {
           highlight: msg.highlight && parse3mf(msg.highlight),
           background: msg.background && parse3mf(msg.background),
-        });
-        viewer.setDebugParts(parts);
-        debugButton.hidden = !parts;
+        };
+        showDebugParts();
       } catch (err) {
         showBanner(`Could not read the # / % parts: ${String(err)}`);
       }

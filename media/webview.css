@@ -7,8 +7,11 @@ body {
   background: var(--vscode-editor-background);
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-size: var(--ui-font-size, var(--vscode-font-size));
 }
+
+/* Settings set --ui-font-size, --tools-width, --params-width, --measure-color, --measure-code-color
+   and --measure-label-size on the root; the fallbacks below are the defaults. */
 
 body {
   display: flex;
@@ -53,7 +56,8 @@ body {
   flex: 1;
 }
 
-/* Floating cards (Section, Measure) stacked in the top-left corner; short, so they hide little. */
+/* Floating cards (Section, Measure) stacked down one side; short, so they hide little. The side
+   and the offset beside the Parameters panel are set from the settings. */
 #left-cards {
   position: absolute;
   top: 8px;
@@ -63,7 +67,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 260px; /* room for three "-120.00" coordinate fields plus Add */
+  width: var(--tools-width, 260px); /* 260: room for three "-120.00" coordinate fields plus Add */
   pointer-events: none; /* only the cards themselves take clicks */
 }
 
@@ -78,7 +82,7 @@ body {
   border-radius: 4px;
   background: color-mix(in srgb, var(--vscode-sideBar-background, var(--vscode-editor-background)) 94%, transparent);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  font-size: calc(var(--vscode-font-size) * 1.1);
+  font-size: calc(var(--ui-font-size, var(--vscode-font-size)) * 1.1);
   pointer-events: auto;
 }
 
@@ -403,7 +407,7 @@ body {
 #measure-list .code-tag {
   justify-self: center;
   font-size: 0.75em;
-  color: #8ee07a;
+  color: var(--measure-code-color, #8ee07a);
 }
 
 #measure-list .measure-item button {
@@ -451,7 +455,7 @@ body {
 }
 
 #measure-overlay .m-line {
-  stroke: #ffd24d;
+  stroke: var(--measure-color, #ffd24d);
   stroke-width: 1.5;
 }
 
@@ -461,7 +465,7 @@ body {
 
 /* From echo("measure", …) in the file. */
 #measure-overlay .m-line.code {
-  stroke: #8ee07a;
+  stroke: var(--measure-code-color, #8ee07a);
 }
 
 #measure-overlay .m-line.highlight {
@@ -470,7 +474,7 @@ body {
 }
 
 #measure-overlay .m-end {
-  fill: #ffd24d;
+  fill: var(--measure-color, #ffd24d);
   stroke: #000;
   stroke-width: 1;
 }
@@ -486,12 +490,12 @@ body {
 }
 
 #measure-overlay .m-label {
-  font-size: 13px;
+  font-size: var(--measure-label-size, 13px);
   font-weight: 600;
 }
 
 #measure-overlay .m-sub {
-  font-size: 11px;
+  font-size: calc(var(--measure-label-size, 13px) * 0.85);
 }
 
 #measure-overlay .snap {
@@ -553,12 +557,22 @@ canvas.measuring {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  width: 300px;
+  width: var(--params-width, 300px);
+  box-sizing: border-box;
   border-left: 1px solid var(--vscode-panel-border);
   background: color-mix(in srgb, var(--vscode-sideBar-background, var(--vscode-editor-background)) 94%, transparent);
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  font-size: calc(var(--vscode-font-size) * 1.1);
+  font-size: calc(var(--ui-font-size, var(--vscode-font-size)) * 1.1);
+}
+
+/* scadPreview.layout.parametersSide = left */
+body.params-left #params {
+  right: auto;
+  left: 0;
+  border-left: none;
+  border-right: 1px solid var(--vscode-panel-border);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.35);
 }
 
 #params .presets {
@@ -568,8 +582,13 @@ canvas.measuring {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+/* With large text or a narrow panel, the buttons wrap below the preset list instead of crushing it. */
+#params .presets {
+  flex-wrap: wrap;
+}
+
 #params .presets select {
-  flex: 1;
+  flex: 1 1 9em;
   min-width: 0;
 }
 
@@ -716,6 +735,28 @@ canvas.measuring {
   display: block;
 }
 
+/* Arrows round the view cube. Only the arrows take clicks; the cube itself is in the canvas below. */
+#view-cube-controls {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+#view-cube-controls .cube-arrow {
+  fill: #c9cdd3;
+  fill-opacity: 0.45;
+  stroke: #2b2e33;
+  stroke-width: 0.8;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: fill-opacity 0.1s;
+}
+
+#view-cube-controls .cube-arrow:hover {
+  fill: #7fb8ea;
+  fill-opacity: 1;
+}
+
 /* --inset-left/right: px covered by overlay panels, set by the viewer. */
 #badge {
   position: absolute;
@@ -725,7 +766,30 @@ canvas.measuring {
   border-radius: 10px;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+/* Only the Cancel button takes clicks; the rest of the badge lets them through to the view. */
+#badge-cancel {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#badge-cancel[hidden] {
+  display: none;
+}
+
+#statusbar .warn {
+  color: var(--vscode-editorWarning-foreground, #cca700);
 }
 
 #banner {

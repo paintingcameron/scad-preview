@@ -144,9 +144,14 @@ function joinSegments(coords: number[], segments: number[]): Loop[] {
   return loops;
 }
 
-/** Drop points in the middle of straight runs (left by triangle edges), then detect circles. */
+/**
+ * Merge points a hair apart, then drop points in the middle of straight runs (left by triangle edges),
+ * then detect circles. Merging comes first and compares with the last point kept: a cut just past a
+ * row of mesh corners leaves a cluster of near-identical points at each corner, and judging each
+ * against its dropped neighbour could throw away the whole cluster, corner and all.
+ */
 function finishLoop(loop: Loop): Loop {
-  const p = loop.points;
+  const p = mergeNearby(loop.points, loop.closed);
   const n = p.length / 2;
   const kept: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -159,13 +164,33 @@ function finishLoop(loop: Loop): Loop {
     const by = p[next * 2 + 1] - p[i * 2 + 1];
     const la = Math.hypot(ax, ay);
     const lb = Math.hypot(bx, by);
-    if (!isEnd && (la < JOIN_TOLERANCE || (Math.abs(ax * by - ay * bx) <= 1e-9 * la * lb && ax * bx + ay * by > 0))) continue;
+    if (!isEnd && n > 3 && Math.abs(ax * by - ay * bx) <= 1e-9 * la * lb && ax * bx + ay * by > 0) continue;
     kept.push(p[i * 2], p[i * 2 + 1]);
   }
   const result: Loop = { points: kept, closed: loop.closed };
   const circle = loop.closed ? fitCircle(kept) : undefined;
   if (circle) result.circle = circle;
   return result;
+}
+
+/** Points with each one closer than JOIN_TOLERANCE to the last one kept left out; open chains keep their last point. */
+function mergeNearby(points: number[], closed: boolean): number[] {
+  const n = points.length / 2;
+  const kept: number[] = [];
+  const near = (i: number, k: number) =>
+    Math.hypot(points[i * 2] - kept[k * 2], points[i * 2 + 1] - kept[k * 2 + 1]) < JOIN_TOLERANCE;
+  for (let i = 0; i < n; i++) {
+    if (kept.length > 0 && near(i, kept.length / 2 - 1)) {
+      if (!closed && i === n - 1) kept.splice(-2, 2, points[i * 2], points[i * 2 + 1]);
+      continue;
+    }
+    kept.push(points[i * 2], points[i * 2 + 1]);
+  }
+  // A closed loop also wraps round: the last point may sit on the first.
+  if (closed && kept.length > 2 && Math.hypot(kept[kept.length - 2] - kept[0], kept[kept.length - 1] - kept[1]) < JOIN_TOLERANCE) {
+    kept.splice(-2, 2);
+  }
+  return kept;
 }
 
 /**

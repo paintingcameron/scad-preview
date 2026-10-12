@@ -57,6 +57,25 @@ describe('sliceMesh', () => {
     }
   });
 
+  it('keeps every corner when the plane lies on a row of corners', () => {
+    // A tall 16-sided prism, sides split into two triangles each. Cut at its base, the nudged plane
+    // crosses each side's diagonal a few µm from the corner, leaving near-duplicate points there.
+    const sides = 16;
+    const r = 10;
+    const h = 100;
+    const ring = (k: number, z: number) => [r * Math.cos((2 * Math.PI * k) / sides), r * Math.sin((2 * Math.PI * k) / sides), z];
+    const tris: number[] = [];
+    for (let k = 0; k < sides; k++) {
+      const next = (k + 1) % sides; // the last side reuses the first corners exactly, so the outline closes
+      const [b0, b1, t0, t1] = [ring(k, 0), ring(next, 0), ring(k, h), ring(next, h)];
+      tris.push(...b0, ...b1, ...t1, ...b0, ...t1, ...t0);
+    }
+    const cut = sliceMesh(new Float32Array(tris), 2, 0);
+    expect(cut.loops).toHaveLength(1);
+    expect(cut.loops[0].points).toHaveLength(sides * 2);
+    expect(cut.loops[0].circle?.r).toBeCloseTo(r, 4);
+  });
+
   it('returns nothing when the plane misses the model', () => {
     expect(sliceMesh(positions, 2, 50).loops).toHaveLength(0);
   });

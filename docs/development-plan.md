@@ -199,6 +199,34 @@ Section off it is the whole model.
 - Screenshot to PNG, and export the current view's STL/3MF with the current parameters.
 - Package as a `.vsix` for local install.
 
+**Status: all but packaging built (2026-10-09), awaiting a hands-on check.**
+- Cache: in memory, shared by panels, 256 MB, least recently used out first. Keyed by program, `-D`
+  values and the contents of every file the render read (hashes reused while size and mtime hold),
+  stored under the render's own deps so a changed include or library never gives a stale hit. `#` / `%`
+  parts are cached with their result. The Render button bypasses it.
+- Watching: one watcher per folder of the deps, so changes from outside VS Code (git, other editors,
+  library updates) re-render.
+- AppImage: measured 0.36 s per run vs 0.06 s unpacked. Unpacked once (~0.8 s, 294 MB) into the
+  extension's global storage, reused until the AppImage changes; older copies are deleted.
+  `scadPreview.unpackAppImage` turns it off.
+- Guardrails: the badge shows elapsed time against the last full render's time, with Cancel (also on
+  the status bar item and as a command); over a million facets is flagged in the stats. OpenSCAD's
+  CLI reports no progress, so there is no real progress bar.
+- Export…: PNG of the view (without panels or measurement overlay), STL (binary) or 3MF. Meshes come
+  from the cached full render of the current values when there is one, otherwise OpenSCAD writes the
+  file under a cancellable progress notification.
+
+Added after the plan (2026-10-12):
+- View cube in the FreeCAD style: faces, edges and corners to click, arrows that step 45° about the
+  screen's own axes (over the poles, upside down if need be) and roll 45°, with the X/Y/Z axes as a
+  separate gizmo beside it.
+- Settings for text size, background, model / measurement / `#` / `%` colours, which side and how wide
+  the panels are, the cube's corner and size, the axes, and whether a preview starts orthographic or
+  with edges. All apply live.
+- `#` / `%` parts draw slightly towards the camera so they don't flicker where they touch the model.
+- Section outline fix: a cut just past a row of mesh corners lost some of those corners (the trainer at
+  z = 5, 17 and 22 gave squared-off outlines).
+
 ## Testing
 
 - **Unit (Vitest)**: stderr → diagnostics parser, param JSON → controls, `-D` quoting, CSG parser,

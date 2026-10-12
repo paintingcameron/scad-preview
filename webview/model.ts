@@ -56,14 +56,14 @@ export function buildModel(source: MeshData, defaultColor: Rgba): THREE.Group {
   return group;
 }
 
-/** How OpenSCAD's preview draws them: `#` translucent pink-red, `%` faint grey. */
-const DEBUG_STYLE = {
-  highlight: { color: 0xff3d6e, opacity: 0.45 },
-  background: { color: 0xb4b4b4, opacity: 0.22 },
-};
+/** How see-through they are, as in OpenSCAD's preview: `#` clearly, `%` faintly. */
+const DEBUG_OPACITY = { highlight: 0.45, background: 0.22 };
 
-/** Translucent meshes for the `#` (highlight) and `%` (background) parts, ignoring their own colors. */
-export function buildDebugParts(parts: { highlight?: MeshData; background?: MeshData }): THREE.Group | undefined {
+/** Translucent meshes for the `#` (highlight) and `%` (background) parts, in the given colors. */
+export function buildDebugParts(
+  parts: { highlight?: MeshData; background?: MeshData },
+  colors: { highlight: string; background: string },
+): THREE.Group | undefined {
   const group = new THREE.Group();
   for (const key of ['background', 'highlight'] as const) {
     const data = parts[key];
@@ -71,7 +71,17 @@ export function buildDebugParts(parts: { highlight?: MeshData; background?: Mesh
     const all = Array.from({ length: data.positions.length / 9 }, (_, t) => t);
     const mesh = new THREE.Mesh(
       geometryFor(data, all),
-      surfaceMaterial({ ...DEBUG_STYLE[key], transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+      surfaceMaterial({
+        color: new THREE.Color(colors[key]),
+        opacity: DEBUG_OPACITY[key],
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        // A cut leaves the model's surface exactly where the part's is; pull the part forward so it
+        // draws cleanly there instead of flickering in and out.
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
     );
     mesh.renderOrder = 2; // after the model, including its transparent parts
     group.add(mesh);

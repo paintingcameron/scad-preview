@@ -30,6 +30,11 @@
         "command": "scadPreview.showOutput",
         "title": "Show Render Output",
         "category": "SCAD Preview"
+      },
+      {
+        "command": "scadPreview.cancelRender",
+        "title": "Cancel Render",
+        "category": "SCAD Preview"
       }
     ],
     "menus": {
@@ -59,13 +64,129 @@
           "type": "string",
           "default": "#ffffff",
           "pattern": "^#[0-9a-fA-F]{6}$",
+          "format": "color-hex",
           "markdownDescription": "Color for parts without a `color()`, as `#RRGGBB`."
+        },
+        "scadPreview.appearance.fontSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 40,
+          "markdownDescription": "Text size of the preview's toolbar and panels, in px. `0` follows VS Code's font size (the panels use 10% more)."
+        },
+        "scadPreview.appearance.background": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "markdownDescription": "Background of the 3D view, as `#RRGGBB`. Empty uses the editor's background."
+        },
+        "scadPreview.appearance.measureColor": {
+          "type": "string",
+          "default": "#ffd24d",
+          "format": "color-hex",
+          "markdownDescription": "Color of measurements you add."
+        },
+        "scadPreview.appearance.codeMeasureColor": {
+          "type": "string",
+          "default": "#8ee07a",
+          "format": "color-hex",
+          "markdownDescription": "Color of measurements from `echo(\"measure\", …)` in the file."
+        },
+        "scadPreview.appearance.measureLabelSize": {
+          "type": "number",
+          "default": 13,
+          "minimum": 8,
+          "maximum": 40,
+          "markdownDescription": "Text size of measurement labels on the model, in px."
+        },
+        "scadPreview.appearance.highlightColor": {
+          "type": "string",
+          "default": "#ff3d6e",
+          "format": "color-hex",
+          "markdownDescription": "Color of `#` (highlight) parts. They are drawn see-through."
+        },
+        "scadPreview.appearance.backgroundPartColor": {
+          "type": "string",
+          "default": "#b4b4b4",
+          "format": "color-hex",
+          "markdownDescription": "Color of `%` (background) parts. They are drawn faintly see-through."
+        },
+        "scadPreview.layout.toolsSide": {
+          "type": "string",
+          "enum": ["left", "right"],
+          "default": "left",
+          "markdownDescription": "Side for the Section and Measure panels. On the same side as Parameters, they sit next to it."
+        },
+        "scadPreview.layout.toolsWidth": {
+          "type": "number",
+          "default": 260,
+          "minimum": 200,
+          "maximum": 600,
+          "markdownDescription": "Width of the Section and Measure panels, in px."
+        },
+        "scadPreview.layout.parametersSide": {
+          "type": "string",
+          "enum": ["right", "left"],
+          "default": "right",
+          "markdownDescription": "Side for the Parameters panel."
+        },
+        "scadPreview.layout.parametersWidth": {
+          "type": "number",
+          "default": 300,
+          "minimum": 200,
+          "maximum": 800,
+          "markdownDescription": "Width of the Parameters panel, in px."
+        },
+        "scadPreview.viewCube.show": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the navigation cube."
+        },
+        "scadPreview.viewCube.corner": {
+          "type": "string",
+          "enum": ["bottom-right", "bottom-left", "top-right", "top-left"],
+          "default": "bottom-right",
+          "markdownDescription": "Corner of the 3D view for the navigation cube and the axes."
+        },
+        "scadPreview.viewCube.size": {
+          "type": "number",
+          "default": 190,
+          "minimum": 100,
+          "maximum": 400,
+          "markdownDescription": "Size of the navigation cube with its arrows, in px."
+        },
+        "scadPreview.axes.show": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the X/Y/Z axes next to the navigation cube."
+        },
+        "scadPreview.axes.size": {
+          "type": "number",
+          "default": 110,
+          "minimum": 50,
+          "maximum": 300,
+          "markdownDescription": "Size of the X/Y/Z axes, in px."
+        },
+        "scadPreview.view.orthographic": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Open previews with an orthographic (no perspective) view."
+        },
+        "scadPreview.view.edges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Open previews with facet edges shown."
         },
         "scadPreview.draftFn": {
           "type": "integer",
           "default": 16,
           "minimum": 0,
           "markdownDescription": "While a customizer slider is being dragged, render with `$fn` set to this for speed, then do one full render on release. `0` turns draft renders off."
+        },
+        "scadPreview.unpackAppImage": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When OpenSCAD is an AppImage, unpack it once (about 300 MB, in VS Code's storage for this extension) and run the unpacked copy. Starting an AppImage costs about 0.3 s per run; the unpacked copy starts in about 0.05 s. Redone when the AppImage changes."
         },
         "scadPreview.debugModifiers": {
           "type": "boolean",

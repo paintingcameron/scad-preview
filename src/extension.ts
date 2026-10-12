@@ -20,6 +20,7 @@ export function activate(context: vscode.ExtensionContext): void {
       PreviewPanel.show(context, services, target);
     }),
     vscode.commands.registerCommand('scadPreview.showOutput', () => services.output.show(true)),
+    vscode.commands.registerCommand('scadPreview.cancelRender', () => PreviewPanel.cancelActive()),
   );
 }
 

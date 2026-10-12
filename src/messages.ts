@@ -57,14 +57,9 @@ export function parseEchoes(output: string): string[] {
     .map((l) => l.slice(6));
 }
 
-export type Vec3 = [number, number, number];
+import type { CodeMeasure } from './sharedTypes';
 
-/** A measurement the model asks for with `echo("measure", a, b, label)`. */
-export interface CodeMeasure {
-  a: Vec3;
-  b: Vec3;
-  label?: string;
-}
+export type { CodeMeasure, Vec3 } from './sharedTypes';
 
 const NUM = String.raw`-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?`;
 const POINT = String.raw`\[\s*(${NUM})\s*,\s*(${NUM})\s*(?:,\s*(${NUM})\s*)?\]`;

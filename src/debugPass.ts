@@ -75,6 +75,11 @@ export class DebugPass {
     }
   }
 
+  /** OpenSCAD is running for a pass. */
+  get busy(): boolean {
+    return this.children.size > 0;
+  }
+
   cancel(): void {
     this.generation++;
     for (const child of this.children) killGroup(child);

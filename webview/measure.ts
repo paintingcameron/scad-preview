@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import type { MeasureKind, SavedMeasurement, SavedMeasures } from '../src/measureStore';
-import type { CodeMeasure } from '../src/messages';
+import type { CodeMeasure, MeasureKind, SavedMeasurement, SavedMeasures } from '../src/sharedTypes';
 import { castRay, type Vec3 } from './meshRay';
 import type { SectionState } from './section';
 import {
