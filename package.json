@@ -1,14 +1,18 @@
 {
   "name": "scad-preview",
-  "displayName": "SCAD Preview",
-  "description": "Fast OpenSCAD preview with color, customizer, cross-sections and slice measurement.",
-  "version": "0.0.1",
+  "displayName": "OpenSCAD Preview",
+  "description": "Preview OpenSCAD models inside VS Code: color, customizer sliders, cross-sections and 2D slice measurement.",
+  "version": "0.1.0",
   "publisher": "paintingcameron",
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "GPL-3.0-or-later",
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/paintingcameron/scad-preview.git"
+    "url": "https://github.com/paintingcameron/scad-preview.git"
+  },
+  "homepage": "https://github.com/paintingcameron/scad-preview#readme",
+  "bugs": {
+    "url": "https://github.com/paintingcameron/scad-preview/issues"
   },
   "engines": {
     "vscode": "^1.95.0"
@@ -16,6 +20,17 @@
   "categories": [
     "Visualization"
   ],
+  "keywords": [
+    "openscad",
+    "scad",
+    "cad",
+    "3d printing",
+    "preview"
+  ],
+  "galleryBanner": {
+    "color": "#1a1b20",
+    "theme": "dark"
+  },
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {

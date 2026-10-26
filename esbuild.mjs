@@ -8,6 +8,8 @@ const common = {
   bundle: true,
   minify: production,
   sourcemap: !production,
+  // Bundled MIT dependencies require their notices to ship with the code; see THIRD-PARTY-NOTICES.md.
+  legalComments: 'eof',
   logLevel: 'info',
 };
 
