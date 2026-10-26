@@ -137,6 +137,7 @@ export class Viewer {
     this.renderer.setAnimationLoop(() => {
       this.stepTurn();
       this.controls.update();
+      this.keepInView();
       const { clientWidth: w, clientHeight: h } = this.container;
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.clear();
@@ -148,6 +149,35 @@ export class Viewer {
 
   private readonly frameCallbacks: (() => void)[] = [];
   private turn?: Turn;
+  /** Around the model and the grid: everything that must stay between the near and far planes. */
+  private sceneSphere = new THREE.Sphere(new THREE.Vector3(), 100);
+
+  /**
+   * Keep the model and grid between the camera's near and far planes, wherever the camera is.
+   * Zooming the orthographic camera changes its scale, not its distance, so after zooming in with
+   * perspective and switching over, it can sit inside the model and the near plane slices it open;
+   * it is moved back clear of everything instead (which doesn't change the picture).
+   */
+  private keepInView(): void {
+    const { center, radius } = this.sceneSphere;
+    const cam = this.camera;
+    const target = this.controls.target;
+    const margin = radius * 1.1;
+    if (cam === this.ortho) {
+      const clear = target.distanceTo(center) + margin;
+      const offset = cam.position.clone().sub(target);
+      if (offset.length() < clear) cam.position.copy(target).addScaledVector(offset.normalize(), clear);
+    }
+    // Depth along the line of sight, so a model off to one side is measured properly.
+    const forward = target.clone().sub(cam.position).normalize();
+    const depth = center.clone().sub(cam.position).dot(forward);
+    const near = Math.max(depth - margin, radius * 1e-3, 0.01);
+    const far = Math.max(depth + margin, near * 2);
+    if (cam.near === near && cam.far === far) return;
+    cam.near = near;
+    cam.far = far;
+    cam.updateProjectionMatrix();
+  }
 
   /** Turn the camera about the target to look from `direction`, upright, keeping its distance. Animated. */
   lookFrom(direction: THREE.Vector3): void {
@@ -445,6 +475,8 @@ export class Viewer {
     const grid = new THREE.GridHelper(size, size / spacing, 0x555555, 0x333333);
     grid.rotation.x = Math.PI / 2; // GridHelper lies in XZ; rotate into the XY build plate.
     this.grid = grid;
+    const all = box.clone().union(new THREE.Box3(new THREE.Vector3(-size / 2, -size / 2, 0), new THREE.Vector3(size / 2, size / 2, 0)));
+    this.sceneSphere = all.getBoundingSphere(new THREE.Sphere());
     this.scene.add(grid);
   }
 
