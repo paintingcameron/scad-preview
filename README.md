@@ -28,6 +28,8 @@ it `include`s or `use`s.
 - **Section** — cut the model on any axis and see a solid cut face.
 - **Measure** — on a cut, snap to the outline to measure distances, wall thickness, angles and
   bounding boxes. `echo("measure", ...)` in the file draws its own measurements in a second color.
+  Measurements you add by hand are kept in a `.scad-preview/` folder beside the file, which is
+  worth adding to `.gitignore`.
 - **Debug modifiers** — `#` parts are drawn see-through in a highlight color and `%` parts faintly,
   from a second pass that runs after each render.
 - **Export** — write STL or 3MF with the parameter values currently in the panel.

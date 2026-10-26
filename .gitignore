@@ -3,5 +3,6 @@ dist/
 out/
 *.vsix
 .vscode-test/
+.scad-preview/
 *.log
 .DS_Store
