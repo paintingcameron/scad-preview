@@ -3,7 +3,7 @@
 Preview OpenSCAD models inside VS Code: color, customizer sliders, cross-sections and 2D slice
 measurement. The model renders in an editor panel next to the code, not in a separate application.
 
-![The preview panel beside a .scad file](https://raw.githubusercontent.com/paintingcameron/scad-preview/main/media/screenshot.png)
+![The preview panel showing icon.scad: the model, its # debug parts, the navigation cube and the Parameters panel](https://raw.githubusercontent.com/paintingcameron/scad-preview/main/media/screenshot.png)
 
 ## Requirements
 
